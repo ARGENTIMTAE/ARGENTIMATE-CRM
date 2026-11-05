@@ -488,7 +488,7 @@ let ventas=[], productos=[], loaded={v:false,p:false};
 let tab="inicio", month=today().slice(0,7);
 let fCanal="Todos", fEstado="Todos", openId=null, delArm=null, cliQ="", prodQ="", editProd=null;
 let editingId=null;
-const blank=()=>({fecha:today(),canal:"WhatsApp",nombre:"",tel:"",medio:"Transferencia",items:[],envio:0,descuento:0,pago:"pendiente",entrega:"preparar",notas:""});
+const blank=()=>({fecha:today(),canal:"WhatsApp",nombre:"",tel:"",medio:"Transferencia",items:[],envio:0,descuento:0,pago:"pendiente",entrega:"preparar",notas:"",sumaSello:true});
 let form=store("argv-draft")||blank();
 let prodSearch="";
 
@@ -573,6 +573,7 @@ function renderVentas(){
           ${+v.descuento?`<div class="l"><span>Descuento</span><span class="num">−${money(v.descuento)}</span></div>`:""}
           <div class="l"><span>Pago</span><span>${esc(v.medio||"")}</span></div>
           ${v.tel?`<div class="l"><span>Teléfono</span><span class="num">${esc(v.tel)} <button class="ghost" data-copy="${esc(v.tel)}">Copiar</button></span></div>`:""}
+          ${selloDetalle(v)}
           ${v.notas?`<div class="hint">${esc(v.notas)}</div>`:""}
           <div class="row" style="justify-content:flex-end"><button class="ghost" data-edit="${v.id}">Editar</button><button class="ghost" data-dup="${v.id}">Repetir</button><button class="ghost" data-nota="${v.id}">Nota de venta</button><button class="ghost danger" data-del="${v.id}">${delArm===v.id?"Tocá de nuevo para borrar":"Borrar"}</button></div>
         </div>`:""}
@@ -587,13 +588,14 @@ $("#v-ventas").addEventListener("click",async e=>{
   if(d.fc){fCanal=d.fc;renderVentas()}
   else if(d.fe){fEstado=d.fe;renderVentas()}
   else if(d.open){openId=openId===d.open?null:d.open;delArm=null;renderVentas()}
-  else if(d.pago){const v=ventas.find(x=>x.id===d.pago);guard(()=>db.doc("ventas/"+v.id).update({pago:v.pago==="pagado"?"pendiente":"pagado"}))}
+  else if(d.pago){const v=ventas.find(x=>x.id===d.pago);cambiarPago(v,v.pago==="pagado"?"pendiente":"pagado")}
+  else if(d.sellomsg){const c=sDb["customers/"+d.sellomsg];if(c){const m=mensajeSello(c);try{await navigator.clipboard.writeText(m);toast("Mensaje copiado")}catch(_){toast(m)}}}
   else if(d.ent){const v=ventas.find(x=>x.id===d.ent);const i=ENTREGA.findIndex(x=>x[0]===v.entrega);guard(()=>db.doc("ventas/"+v.id).update({entrega:ENTREGA[(i+1)%3][0]}))}
   else if(d.copy){try{await navigator.clipboard.writeText(d.copy);toast("Teléfono copiado")}catch(_){toast(d.copy)}}
   else if(d.edit){const v=ventas.find(x=>x.id===d.edit);editingId=v.id;form={...blank(),...JSON.parse(JSON.stringify(v))};delete form.id;go("nueva")}
   else if(d.nota){const v=ventas.find(x=>x.id===d.nota);nuevoDoc({tipo:"Nota de venta",fecha:v.fecha,lista:v.medio==="Tarjeta / MP"?"Tarjeta":"Transferencia",cliente:{nombre:v.nombre||"",tel:v.tel||"",email:"",direccion:""},items:JSON.parse(JSON.stringify(v.items||[])),envio:+v.envio||0,descuento:+v.descuento||0,ventaId:v.id});go("cotizador")}
   else if(d.dup){const v=ventas.find(x=>x.id===d.dup);editingId=null;form={...blank(),canal:v.canal,nombre:v.nombre,tel:v.tel,medio:v.medio,items:JSON.parse(JSON.stringify(v.items||[]))};go("nueva")}
-  else if(d.del){if(delArm!==d.del){delArm=d.del;renderVentas();return}delArm=null;openId=null;guard(()=>db.doc("ventas/"+d.del).delete(),"Venta borrada")}
+  else if(d.del){if(delArm!==d.del){delArm=d.del;renderVentas();return}delArm=null;openId=null;borrarVenta(ventas.find(x=>x.id===d.del))}
   else if(b.id==="exportBtn")exportCSV();
 });
 async function exportCSV(){
@@ -648,6 +650,7 @@ function renderNueva(){
   <div class="card">
     <div class="row"><span class="hint" style="min-width:64px">Pago</span><div class="chips">
       <button class="chip" data-pagof="pendiente" aria-pressed="${form.pago!=="pagado"}">Por cobrar</button><button class="chip" data-pagof="pagado" aria-pressed="${form.pago==="pagado"}">Pagado</button></div></div>
+    <label class="chk"><input type="checkbox" id="fSello" ${form.sumaSello!==false?"checked":""}> Suma sello cuando esté pagada</label>
     <div class="row"><span class="hint" style="min-width:64px">Entrega</span><div class="chips">${ENTREGA.map(([k,l])=>`<button class="chip" data-entf="${k}" aria-pressed="${form.entrega===k}">${l}</button>`).join("")}</div></div>
     <label class="f">Notas<textarea id="fNotas" rows="2" placeholder="Grabado, dirección de envío, seña…">${esc(form.notas)}</textarea></label>
   </div>
@@ -668,7 +671,7 @@ nv.addEventListener("input",e=>{
   if(t.id==="fEnvio"){form.envio=+t.value.replace(/[^\d]/g,"")||0;refreshTotal()}
   if(t.id==="fDesc"){form.descuento=+t.value.replace(/[^\d]/g,"")||0;refreshTotal()}
 });
-nv.addEventListener("change",e=>{if(e.target.id==="fCamp"){form.campana=e.target.value;saveDraft()}if(e.target.id==="fMedio"){form.medio=e.target.value;
+nv.addEventListener("change",e=>{if(e.target.id==="fSello"){form.sumaSello=e.target.checked;saveDraft()}if(e.target.id==="fCamp"){form.campana=e.target.value;saveDraft()}if(e.target.id==="fMedio"){form.medio=e.target.value;
   form.items.forEach(i=>{if(i.pid&&!i.manual){const p=productos.find(x=>x.id===i.pid);if(p)i.precio=priceFor(p)}});saveDraft();renderNueva()}});
 nv.addEventListener("keydown",e=>{if(e.target.id==="pSearch"&&e.key==="Enter"){e.preventDefault();const q=norm(prodSearch);const m=productos.find(p=>norm(p.nombre).includes(q));if(m)addProd(m);else if(prodSearch.trim())addFree()}});
 function addProd(p){const ex=form.items.find(i=>i.pid===p.id);if(ex)ex.cant++;else form.items.push({pid:p.id,nombre:p.nombre,cant:1,precio:priceFor(p)});prodSearch="";saveDraft();renderNueva();$("#pSearch").focus()}
@@ -691,9 +694,12 @@ async function saveVenta(){
   if(!form.nombre.trim()&&!form.items.length){toast("Poné al menos el cliente o un producto");return}
   const data={...form,nombre:form.nombre.trim(),tel:form.tel.trim(),total:totalOf(form),items:form.items.map(({manual,...i})=>i)};
   const b=$("#saveBtn");b.disabled=true;
+  const prev=editingId?ventas.find(x=>x.id===editingId):null,vid=editingId||nuevoIdVenta(),sp=planSello(prev,data);
+  Object.assign(data,sp.patch);
   const ok=editingId
-    ?await guard(()=>db.doc("ventas/"+editingId).update(data),"Cambios guardados")
-    :await guard(()=>db.collection("ventas").add({...data,creado:Date.now()}),"Venta guardada");
+    ?await guard(async()=>{await db.doc("ventas/"+vid).update(data);await aplicarSello(sp)},sp.aviso||"Cambios guardados")
+    :await guard(async()=>{await db.doc("ventas/"+vid).set({...data,creado:Date.now()});await aplicarSello(sp)},sp.aviso||"Venta guardada");
+  if(ok&&sp.doc)openId=vid;
   b.disabled=false;
   if(ok){pedDudas=[];month=form.fecha.slice(0,7);editingId=null;form=blank();store("argv-draft",form);go("ventas")}
 }
@@ -1342,7 +1348,7 @@ const addMov=m=>db.collection("movimientos").add({nota:"",creado:Date.now(),...m
 vf.addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;const d=b.dataset;
   if(d.fv){finV=d.fv;finAjuste=null;delArm=null;renderFinanzas();return}
-  if(d.cobrar){guard(()=>db.doc("ventas/"+d.cobrar).update({pago:"pagado"}),"Venta cobrada");return}
+  if(d.cobrar){cambiarPago(ventas.find(x=>x.id===d.cobrar),"pagado","Venta cobrada");return}
   if(d.pagar){const k="d"+d.pagar;if(delArm!==k){delArm=k;renderFinanzas();return}delArm=null;const x=deudas.find(y=>y.id===d.pagar);
     guard(async()=>{if(!movs.some(m=>m.deuda===x.id))await addMov({tipo:"egreso",monto:+x.monto,fecha:today(),cuenta:x.cuenta,categoria:x.categoria,nota:x.acreedor,deuda:x.id});await db.doc("deudas/"+x.id).update({pagado:true,pagadoFecha:today()})},"Deuda pagada");return}
   if(d.dundo){const ms=movs.filter(m=>m.deuda===d.dundo);guard(async()=>{for(const m of ms)await db.doc("movimientos/"+m.id).delete();await db.doc("deudas/"+d.dundo).update({pagado:false,pagadoFecha:""})},"Pago deshecho");return}
@@ -1736,6 +1742,52 @@ function aplicarPedido(txt){
   const m=$("#pasteMsg");if(m)m.textContent=`Encontré ${r.items.length} producto${r.items.length===1?"":"s"}${r.sueltos.length?` y ${r.sueltos.length} sin identificar, que quedaron en Notas`:""}. Revisá antes de guardar.`;
 }
 const dudasHTML=()=>pedDudas.length?`<div class="hint"><b>¿Era otro?</b></div>${pedDudas.map((d,i)=>`<div class="hint">${esc(d.it.nombre)}:</div><div class="results">${d.opts.map(p=>`<button data-pedalt="${i}" data-pid="${p.id}"><span>${esc(p.nombre)}</span><small class="num">${money(priceFor(p))}</small></button>`).join("")}</div>`).join("")}`:"";
+
+/* ---------- OS: sellos automáticos ----------
+   Una venta pagada suma un sello a la tarjeta del cliente, con las mismas reglas del panel.
+   La venta guarda selloCid: esa marca impide sumar dos veces y permite descontarlo.
+   Solo actúa ante un cambio: las ventas viejas no se tocan al abrir la app. */
+const SELLO_CUPON="SELLOS15", SELLO_URL="https://argentimateros.netlify.app/";
+const nuevoIdVenta=()=>"v"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const selloCliente=n=>{const q=norm(n),k=Object.keys(sDb).find(x=>x.startsWith("customers/")&&norm(sDb[x].name)===q);return k?{id:k.split("/")[1],...sDb[k]}:null};
+function planSello(prev,next){
+  const debe=next.pago==="pagado"&&next.sumaSello!==false&&!!String(next.nombre||"").trim(),tiene=!!prev?.selloCid;
+  if(debe===tiene)return {patch:{},doc:null,aviso:""};
+  if(debe){
+    const ex=selloCliente(next.nombre),antes=+ex?.stamps||0,stamps=antes>=SELLOS_MAX?1:antes+1,lleno=stamps>=SELLOS_MAX;
+    const id=ex?.id||"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+    const data={name:ex?.name||String(next.nombre).trim().slice(0,30),email:ex?.email||"",stamps,coupon:lleno?SELLO_CUPON:"",cards:(+ex?.cards||0)+(lleno?1:0),updatedAt:Date.now()};
+    return {patch:{selloCid:id,selloAntes:antes},doc:{id,data},aviso:lleno?`${data.name} completó la tarjeta: ${SELLO_CUPON}`:`${data.name}: ${stamps} de ${SELLOS_MAX} sellos`};
+  }
+  const c=sDb["customers/"+prev.selloCid],patch={selloCid:"",selloAntes:0};
+  if(!c)return {patch,doc:null,aviso:""};
+  const s=+c.stamps||0,antes=+prev.selloAntes||0,volvio=s===1&&antes>=SELLOS_MAX,lleno=s>=SELLOS_MAX;
+  const stamps=volvio?antes:Math.max(0,s-1);
+  const data={...c,stamps,coupon:volvio?SELLO_CUPON:lleno?"":c.coupon||"",cards:lleno?Math.max(0,(+c.cards||0)-1):+c.cards||0,updatedAt:Date.now()};
+  return {patch,doc:{id:prev.selloCid,data},aviso:`Sello descontado a ${c.name}`};
+}
+const aplicarSello=p=>p.doc?db.doc("customers/"+p.doc.id).set(p.doc.data):Promise.resolve();
+function cambiarPago(v,pago,okMsg){
+  const p=planSello(v,{...v,pago});
+  return guard(async()=>{await db.doc("ventas/"+v.id).update({pago,...p.patch});await aplicarSello(p)},p.aviso||okMsg);
+}
+function borrarVenta(v){
+  const p=planSello(v,{...v,pago:"borrada"});
+  return guard(async()=>{await db.doc("ventas/"+v.id).delete();await aplicarSello(p)},"Venta borrada");
+}
+function linkSello(c){
+  const b=new TextEncoder().encode([c.name,+c.stamps||0,(+c.stamps||0)>=SELLOS_MAX?c.coupon:""].join("|"));let s="";b.forEach(x=>s+=String.fromCharCode(x));
+  return String(sDb["config/main"]?.cardUrl||SELLO_URL).split("#")[0]+"#"+btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function mensajeSello(c){
+  const first=c.name.split(" ")[0],n=+c.stamps||0,link=linkSello(c),left=SELLOS_MAX-n;
+  if(n>=SELLOS_MAX&&c.coupon)return `¡Hola ${first}! Completaste tu tarjeta de sellos de Argentimate 🧉 Ganaste 15% off en tu próxima compra. Tu cupón está acá: ${link}`;
+  return `¡Hola ${first}! Gracias por tu compra en Argentimate 🧉 Ya llevás ${n} de ${SELLOS_MAX} sellos. ${left===1?"Te falta 1 compra":`Te faltan ${left} compras`} para tu 15% off. Mirá tu tarjeta: ${link}`;
+}
+function selloDetalle(v){
+  if(!v.selloCid)return "";const c=sDb["customers/"+v.selloCid];if(!c)return "";
+  return `<div class="l"><span>Tarjeta de ${esc(c.name)}: ${+c.stamps||0} de ${SELLOS_MAX} sellos</span><button class="ghost" data-sellomsg="${esc(v.selloCid)}">Copiar mensaje</button></div>`;
+}
 
 /* ---------- OS: cotizador ----------
    Presupuestos y notas de venta internos. No son comprobantes fiscales: la leyenda es fija,
