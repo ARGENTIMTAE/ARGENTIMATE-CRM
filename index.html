@@ -265,10 +265,15 @@ button.tile{width:100%;margin-bottom:0}
 .foto a{display:block;width:100%;height:100%}
 .foto img{width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block;background:var(--chip)}
 .foto .x{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--bad);font-size:16px;line-height:1;padding:0}
-.bitem{display:grid;grid-template-columns:minmax(0,1.6fr) 56px minmax(0,1fr) 28px;gap:6px;align-items:center}
+.bitem{display:grid;grid-template-columns:minmax(0,1.6fr) 56px minmax(0,1fr) 40px 28px;gap:6px;align-items:center}
+.dz{display:flex;align-items:center;justify-content:center;width:40px;height:38px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--azul);cursor:pointer}
+.dz svg{width:20px;height:20px}
+.bdis{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 4px}
+.bdis>span{font-size:12px;font-weight:600;color:var(--muted)}
+.blist .fotos{gap:6px}.blist .foto{width:52px;height:52px}
 .bitem input{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:8px;font-size:15px;width:100%;min-width:0}
 .bitem .x{border:0;background:none;color:var(--bad);font-size:20px;padding:0}
-@media (max-width:480px){.bitem{grid-template-columns:minmax(0,1fr) 56px 28px}.bitem>:nth-child(3){grid-column:1/3;grid-row:2}.bitem.hint{display:none}}
+@media (max-width:480px){.bitem{grid-template-columns:minmax(0,1fr) 56px 40px}.bitem>:nth-child(3){grid-column:1/3;grid-row:2}.bitem>.dz{grid-column:3;grid-row:2}.bitem.hint{display:none}}
 .blist{display:flex;flex-direction:column;gap:3px;font-size:14px}
 .blist div{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
 .grab{font-size:12px;font-weight:700;border-radius:6px;padding:2px 7px;background:var(--warn-bg);color:var(--warn)}
@@ -2667,7 +2672,7 @@ document.addEventListener("click",e=>{const a=e.target.closest(".foto a");if(!a)
   const cerrar=()=>{v.remove();document.removeEventListener("keydown",esc1)},esc1=k=>{if(k.key==="Escape")cerrar()};
   v.onclick=cerrar;document.addEventListener("keydown",esc1);document.body.appendChild(v);v.focus()});
 const sinBlob=fs=>(fs||[]).map(f=>({id:f.id,url:f.url||""}));
-function fotosHTML(fs,rm){return fs?.length?`<div class="fotos">${fs.map((f,i)=>`<span class="foto"><a href="${esc(fotoSrc(f))}" target="_blank" rel="noopener" aria-label="Ver foto ${i+1}"><img src="${esc(fotoSrc(f))}" alt="" loading="lazy"></a>${rm?`<button class="x" type="button" ${rm}="${i}" aria-label="Quitar foto ${i+1}">×</button>`:""}</span>`).join("")}</div>`:""}
+function fotosHTML(fs,rm,pre=""){return fs?.length?`<div class="fotos">${fs.map((f,i)=>`<span class="foto"><a href="${esc(fotoSrc(f))}" target="_blank" rel="noopener" aria-label="Ver foto ${i+1}"><img src="${esc(fotoSrc(f))}" alt="" loading="lazy"></a>${rm?`<button class="x" type="button" ${rm}="${pre}${i}" aria-label="Quitar foto ${i+1}">×</button>`:""}</span>`).join("")}</div>`:""}
 function errFoto(e){return e?.code==="too_large"?"La foto es muy pesada: probá con otra.":e?.code==="quota_exceeded"?"Se llenó el espacio para fotos.":e?.code==="unsupported_type"?"Ese archivo no se puede subir: probá con una foto JPG o PNG.":e?.code==="not_granted"?"No tenés permiso para subir fotos.":"No se pudo subir la foto. Probá de nuevo."}
 async function imgsParaIA(fotos){try{const l=await sample?.limits?.();if(!l?.images)return [];const ok=l.images.mediaTypes||[];
   return fotos.filter(f=>f.blob&&(!ok.length||ok.includes(f.blob.type))&&(!l.images.maxInputBytes||f.blob.size<=l.images.maxInputBytes)).slice(0,l.images.maxCount||1).map(f=>f.blob)}catch(_){return []}}
@@ -2683,7 +2688,7 @@ let borradores=[], borF="Activos", borTxt=store("argv-bor-txt")||"", borFotos=[]
 function initBor(){db.collection("borradores").orderBy("creado","desc").onSnapshot(s=>{borradores=s.docs.map(d=>({id:d.id,...d.data()}));loaded.b=true;renderAll()},()=>{loaded.b=true;renderAll()})}
 const capi=s=>String(s||"").trim().replace(/(^|\s)(\p{L})/gu,(m,a,c)=>a+c.toUpperCase());
 const borEstLbl=b=>b.estado==="venta"?"Venta":(BOR_EST.find(e=>e[0]===b.estado)||BOR_EST[0])[1];
-const borItemTxt=i=>`${+i.cant>1?i.cant+"× ":""}${i.nombre}${i.grabado?` (grabado: ${i.grabado})`:""}`;
+const borItemTxt=i=>`${+i.cant>1?i.cant+"× ":""}${i.nombre}${i.grabado?` (grabado: ${i.grabado})`:""}${i.diseno?.length?" [con diseño]":""}`;
 const borLinea=b=>`${b.cliente||"Sin nombre"}: ${(b.items||[]).map(borItemTxt).join(", ")||String(b.texto||"").replace(/\s+/g," ").trim()||"(sin productos)"}${b.notas?` · ${b.notas}`:""}`;
 function borLista(){
   if(borF==="Activos")return borradores.filter(b=>b.estado!=="venta");
@@ -2738,7 +2743,7 @@ ${txt.slice(0,6000)||"(sin texto: solo las imágenes)"}`,imgs.length?{modelTier:
   }
   borBusy=false;renderBorradores();
 }
-const borLimpio=p=>({cliente:String(p.cliente||"").trim(),notas:String(p.notas||"").trim(),items:(p.items||[]).map(i=>{const nombre=String(i.nombre||"").trim(),pr=productos.find(x=>norm(x.nombre)===norm(nombre));return {nombre,pid:pr?.id||"",cant:Math.max(1,+i.cant||1),grabado:String(i.grabado||"").trim()}}).filter(i=>i.nombre)});
+const borLimpio=p=>({cliente:String(p.cliente||"").trim(),notas:String(p.notas||"").trim(),items:(p.items||[]).map(i=>{const nombre=String(i.nombre||"").trim(),pr=productos.find(x=>norm(x.nombre)===norm(nombre));return {nombre,pid:pr?.id||"",cant:Math.max(1,+i.cant||1),grabado:String(i.grabado||"").trim(),...(i.diseno?.length?{diseno:sinBlob(i.diseno)}:{})}}).filter(i=>i.nombre)});
 async function borGuardar(lista){
   const fotos=sinBlob(borFotos),texto=borTxt.trim(),t=Date.now();
   borBusy=true;renderBorradores();
@@ -2752,15 +2757,16 @@ function borAVenta(b){
   const prev=ventas.find(v=>norm(v.nombre)===norm(b.cliente)&&v.tel);
   form={...blank(),canal:"WhatsApp",nombre:b.cliente||"",tel:prev?.tel||"",borradorId:b.id};
   form.items=(b.items||[]).map(i=>{const p=productos.find(x=>x.id===i.pid)||productos.find(x=>norm(x.nombre)===norm(i.nombre));return p?{pid:p.id,nombre:p.nombre,cant:+i.cant||1,precio:priceFor(p)}:{nombre:i.nombre,cant:+i.cant||1,precio:0}});
-  const gr=(b.items||[]).filter(i=>i.grabado).map(i=>`Grabado ${i.nombre}: ${i.grabado}`);
+  const gr=(b.items||[]).filter(i=>i.grabado||i.diseno?.length).map(i=>`Grabado ${i.nombre}: ${[i.grabado,i.diseno?.length?"(diseño en Borradores)":""].filter(Boolean).join(" ")}`);
   form.notas=[...gr,b.notas].filter(Boolean).join(" · ");
   if(gr.length)form.personalizada=true;
   store("argv-draft",form);go("nueva");toast("Revisá precios y pago, y guardá la venta");
 }
 function borEditorHTML(p,base){
   return `<label class="f">Cliente<input data-bk="${base}.cliente" value="${esc(p.cliente)}" placeholder="Nombre de la persona" autocomplete="off"></label>
-  <div class="bitem hint"><span>Producto</span><span>Cant.</span><span>Grabado</span><span></span></div>
-  ${(p.items||[]).map((it,j)=>`<div class="bitem"><input data-bk="${base}.items.${j}.nombre" list="borL" value="${esc(it.nombre)}" placeholder="Producto" aria-label="Producto" autocomplete="off"><input data-bk="${base}.items.${j}.cant" class="num" inputmode="numeric" value="${esc(it.cant)}" aria-label="Cantidad"><input data-bk="${base}.items.${j}.grabado" value="${esc(it.grabado)}" placeholder="Grabado (vacío si no lleva)" aria-label="Grabado"><button class="x" type="button" data-brm="${base}|${j}" aria-label="Quitar producto">×</button></div>`).join("")}
+  <div class="bitem hint"><span>Producto</span><span>Cant.</span><span>Grabado</span><span>Diseño</span><span></span></div>
+  ${(p.items||[]).map((it,j)=>`<div class="bitem"><input data-bk="${base}.items.${j}.nombre" list="borL" value="${esc(it.nombre)}" placeholder="Producto" aria-label="Producto" autocomplete="off"><input data-bk="${base}.items.${j}.cant" class="num" inputmode="numeric" value="${esc(it.cant)}" aria-label="Cantidad"><input data-bk="${base}.items.${j}.grabado" value="${esc(it.grabado)}" placeholder="Grabado (vacío si no lleva)" aria-label="Grabado">${assetsCap?`<label class="dz" for="bd-${base.replace(".","-")}-${j}" title="Agregar diseño del grabado" aria-label="Agregar diseño del grabado de ${esc(it.nombre||"este producto")}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-9 8"/></svg></label><input type="file" id="bd-${base.replace(".","-")}-${j}" data-bdis="${base}|${j}" accept="image/*" multiple hidden>`:`<span></span>`}<button class="x" type="button" data-brm="${base}|${j}" aria-label="Quitar producto">×</button></div>
+  ${it.diseno?.length?`<div class="bdis"><span>Diseño:</span>${fotosHTML(it.diseno,"data-bdrm",base+"|"+j+"|")}</div>`:""}`).join("")}
   <button class="ghost" type="button" data-badd="${base}" style="align-self:flex-start">+ Agregar producto</button>
   <label class="f">Notas<input data-bk="${base}.notas" value="${esc(p.notas)}" placeholder="Seña, envío, para cuándo…"></label>`;
 }
@@ -2779,7 +2785,7 @@ function renderBorradores(){
     :`<div class="card paste"><h2>Nuevo pedido</h2>
       <label class="f">Escribilo o pegalo como en el grupo de WhatsApp<textarea id="borTxt" rows="5" placeholder="Ej: Juan Pérez - 2 mates imperiales negros, uno grabado Juan&#10;Lucía: termo + bombilla pico de loro">${esc(borTxt)}</textarea></label>
       ${fotosHTML(borFotos,"data-bfrm")}
-      <div class="row">${assetsCap?`<label class="secondary" for="borFile">Agregar fotos</label><input type="file" id="borFile" accept="image/*" multiple hidden>`:""}
+      <div class="row">${assetsCap?`<label class="secondary" for="borFile">Agregar fotos o diseños</label><input type="file" id="borFile" accept="image/*" multiple hidden>`:""}
         <button class="primary" id="borOrd" style="width:auto;flex:1 1 180px" ${borBusy?"disabled":""}>${sample?"Ordenar con Argenti":"Ordenar pedido"}</button>
         <button class="ghost" id="borRaw" ${borBusy?"disabled":""}>Guardar sin ordenar</button></div>
       ${borMsg?`<p class="hint" role="status">${esc(borMsg)}</p>`:""}
@@ -2790,7 +2796,7 @@ function renderBorradores(){
       <div class="row">${assetsCap?`<label class="secondary" for="beFile">Agregar fotos</label><input type="file" id="beFile" accept="image/*" multiple hidden>`:""}<button class="secondary" id="beSave">Guardar cambios</button><button class="ghost" id="beCancel">Cancelar</button></div></article>`;
     const open=borOpen===b.id,venta=b.estado==="venta",est=b.estado||"anotado",items=b.items||[];
     return `<article class="venta"><div class="vhead"><div class="who"><b>${esc(b.cliente||"Sin nombre")}</b><div class="items">${esc(fechaCorta(b.fecha))}${b.fotos?.length?` · ${b.fotos.length} foto${b.fotos.length===1?"":"s"}`:""}</div></div><span class="pill ${venta||est==="retirado"?"ok":est==="pedido"?"":"warn"}">${esc(borEstLbl(b))}</span></div>
-      ${items.length?`<div class="blist">${items.map(i=>`<div><span>${+i.cant>1?`<b class="num">${esc(i.cant)}×</b> `:""}${esc(i.nombre)}</span>${i.grabado?`<span class="grab">Grabado: ${esc(i.grabado)}</span>`:""}</div>`).join("")}</div>`:b.texto?`<pre class="raw">${esc(b.texto)}</pre>`:`<div class="hint">Sin productos cargados.</div>`}
+      ${items.length?`<div class="blist">${items.map(i=>`<div><span>${+i.cant>1?`<b class="num">${esc(i.cant)}×</b> `:""}${esc(i.nombre)}</span>${i.grabado?`<span class="grab">Grabado: ${esc(i.grabado)}</span>`:""}${i.diseno?.length?`<span class="grab">Con diseño</span>${fotosHTML(i.diseno)}`:""}</div>`).join("")}</div>`:b.texto?`<pre class="raw">${esc(b.texto)}</pre>`:`<div class="hint">Sin productos cargados.</div>`}
       ${b.notas?`<div class="hint">${esc(b.notas)}</div>`:""}
       ${fotosHTML(b.fotos)}
       <div class="vfoot">${venta?`<button class="st ok" data-bvv="${b.id}">Ver venta</button>`:`<button class="st ${est==="anotado"?"pend":est==="pedido"?"info":"ok"}" data-best="${b.id}" title="Pasar al siguiente estado">${esc(borEstLbl(b))} ›</button>`}<span class="sp"></span>
@@ -2807,7 +2813,12 @@ function renderBorradores(){
 }
 const vb=$("#v-borradores");
 vb.addEventListener("input",e=>{const t=e.target;if(t.id==="borTxt"){borTxt=t.value;store("argv-bor-txt",borTxt);return}if(t.dataset.bk)setBk(t.dataset.bk,t.value)});
-vb.addEventListener("change",async e=>{const t=e.target;if(t.id!=="borFile"&&t.id!=="beFile")return;
+vb.addEventListener("change",async e=>{const t=e.target;
+  if(t.dataset.bdis){const [base,j]=t.dataset.bdis.split("|"),it=borObj(base)?.items?.[+j],files=[...(t.files||[])];t.value="";if(!it||!files.length)return;
+    if(!assetsCap){toast("No tenés permiso para subir fotos");return}
+    toast("Subiendo diseño…");try{await subirA(files,it.diseno=it.diseno||[]);toast("Diseño agregado")}catch(err){toast(errFoto(err))}
+    renderBorradores();return}
+  if(t.id!=="borFile"&&t.id!=="beFile")return;
   const files=[...(t.files||[])];t.value="";if(!files.length)return;
   if(!assetsCap){toast("No tenés permiso para subir fotos");return}
   const edit=t.id==="beFile";borMsg="Subiendo fotos…";if(edit)toast(borMsg);else renderBorradores();
@@ -2824,6 +2835,7 @@ vb.addEventListener("click",async e=>{
   else if(d.bpx!==undefined){borPrev.splice(+d.bpx,1);if(!borPrev.length)borPrev=null;renderBorradores()}
   else if(d.badd){borObj(d.badd)?.items.push({nombre:"",cant:1,grabado:""});renderBorradores()}
   else if(d.brm){const [base,j]=d.brm.split("|");borObj(base)?.items.splice(+j,1);renderBorradores()}
+  else if(d.bdrm){const [base,j,k]=d.bdrm.split("|"),it=borObj(base)?.items?.[+j];if(it?.diseno){it.diseno.splice(+k,1);renderBorradores()}}
   else if(d.bfrm!==undefined){borFotos.splice(+d.bfrm,1);renderBorradores()}
   else if(d.befrm!==undefined){borEdit.fotos.splice(+d.befrm,1);renderBorradores()}
   else if(d.best){const x=bor(d.best);if(!x)return;const i=BOR_EST.findIndex(s=>s[0]===(x.estado||"anotado"));b.disabled=true;guard(()=>db.doc("borradores/"+x.id).update({estado:BOR_EST[(i+1)%BOR_EST.length][0]}))}
