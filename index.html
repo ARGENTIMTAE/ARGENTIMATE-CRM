@@ -259,6 +259,17 @@ pre.rep{margin:0;white-space:pre-wrap;font:14px/1.5 var(--body);overflow-wrap:an
 .amsg{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 13px;display:flex;flex-direction:column;gap:8px;overflow-wrap:anywhere;min-width:0}
 .amsg.u{align-self:flex-end;background:var(--azul);border-color:var(--azul);color:var(--card);max-width:85%}
 button.tile{width:100%;margin-bottom:0}
+/* precios */
+.pclist{display:flex;flex-direction:column;gap:8px}
+.pcrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;align-items:end}
+.pcrow .pcn{grid-column:1/-1;min-width:0;overflow-wrap:anywhere}
+.pcrow .pco{grid-column:1/-1}
+.pcrow input.num{min-width:0;width:100%}
+.pcbar{position:sticky;bottom:12px;z-index:20;display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:0 8px 24px rgba(16,35,70,.14)}
+.pcbar[hidden]{display:none}
+.pcbar span{flex:1;font-weight:600;min-width:140px}
+@media(min-width:900px){.pcrow{grid-template-columns:minmax(0,1fr) repeat(4,104px) 76px}.pcrow .pcn{grid-column:auto}.pcrow .pco{grid-column:auto}}
+
 </style>
 
 <div class="wrap">
@@ -479,7 +490,9 @@ const $=s=>document.querySelector(s);
 const money=n=>"$"+Math.round(n||0).toLocaleString("es-AR");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
-const transf=p=>Math.round((p||0)*0.75/100)*100;
+let precioCfg={};
+const factorT=()=>{const r=precioCfg.recargo===undefined?33.33:+precioCfg.recargo;return Math.abs(r-33.33)<.01?.75:1/(1+r/100)};
+const transf=p=>Math.round((p||0)*factorT()/100)*100;
 const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim();
 function store(k,v){try{if(v===undefined){return JSON.parse(localStorage.getItem(k)||"null")}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
 
@@ -1104,19 +1117,22 @@ function stockMap(){
   return m;
 }
 function margenTxt(costo,precio){if(!(costo>0)||!(precio>0))return "";return `${money(precio-costo)} (${Math.round((precio-costo)/precio*100)}%)`}
+let prodV="Inventario";
+const prodChips=()=>`<div class="chips">${["Inventario","Precios"].map(c=>`<button class="chip" data-pvw="${c}" aria-pressed="${prodV===c}">${c}</button>`).join("")}</div>`;
 function renderProductos(){
+  if(prodV==="Precios"){renderPrecios();return}
   const q=norm(prodQ),sm=stockMap(),ep=editProd;
   const low=p=>{const x=sm.get(p.id);return x&&x.disp<=(+p.stockMin||0)&&x.disp>0},out=p=>{const x=sm.get(p.id);return x&&x.disp<=0};
   let list=productos.filter(p=>!q||norm(p.nombre).includes(q)||norm(p.sku).includes(q)||norm(p.categoria).includes(q));
   if(prodF==="Stock bajo")list=list.filter(p=>low(p)||out(p));
   if(prodF==="Agotados")list=list.filter(out);
   if(prodF==="Sin costo")list=list.filter(p=>!(+p.costo>0));
-  if(prodF==="Poco rentables")list=list.filter(p=>{const c=+p.costo,pr=transf(p.precio);return c>0&&pr>0&&(pr-c)/pr*100<(+autoCfg.margenMin||0)});
+  if(prodF==="Poco rentables")list=list.filter(p=>{const c=+p.costo,pr=transf(p.precio);return !p.oferta&&c>0&&pr>0&&(pr-c)/pr*100<(+autoCfg.margenMin||0)});
   const valor=productos.reduce((a,p)=>{const x=sm.get(p.id);return a+(x&&x.fisico>0?x.fisico*(+p.costo||0):0)},0);
   const hist=ep?[...stockMovs.filter(s=>s.pid===ep.id).map(s=>({f:s.fecha,c:s.creado,t:`${s.tipo==="ajuste"?"Ajuste":s.tipo==="entrada"?"Entrada":"Salida"}${s.nota?" · "+s.nota:""}`,n:(s.cant>0?"+":"−")+Math.abs(s.cant)})),
     ...preciosHist.filter(s=>s.pid===ep.id).map(s=>({f:s.fecha,c:s.creado,t:"Precio tarjeta",n:`${money(s.antes)} → ${money(s.despues)}`}))].sort((a,b)=>b.c-a.c).slice(0,8):[];
   const st=ep&&sm.get(ep.id);
-  $("#v-productos").innerHTML=`
+  $("#v-productos").innerHTML=`${prodChips()}
   <div class="tiles">
     <div class="tile hero"><span class="lbl">Valor del inventario</span><b class="num">${money(valor)}</b><small>stock físico × costo</small></div>
     <div class="tile"><span class="lbl">Con control de stock</span><b class="num">${sm.size}</b><small>de ${productos.length} productos</small></div>
@@ -1126,7 +1142,7 @@ function renderProductos(){
   <div class="card"><h2>${ep?"Editar producto":"Agregar producto"}</h2>
     <div class="prodedit"><label class="f">Nombre<input id="pNombre" value="${esc(ep?.nombre||"")}"></label>
     <label class="f">Precio tarjeta<input id="pPrecio" inputmode="numeric" class="num" value="${ep?.precio||""}"></label></div>
-    <div class="hint" id="pHint">Transferencia: ${money(transf(ep?.precio))} (25% menos)</div>
+    <div class="hint" id="pHint">Transferencia: ${money(transf(ep?.precio))}</div>
     <details ${ep?"open":""}><summary><b>Costos, stock y detalles</b></summary>
       <div class="more3" style="margin-top:10px">
         ${PNUM.map(([k,l])=>`<label class="f">${l}<input data-pn="${k}" inputmode="numeric" class="num" value="${+ep?.[k]||""}"></label>`).join("")}
@@ -1158,7 +1174,7 @@ const vp=$("#v-productos");
 const onlyNum=s=>+String(s||"").replace(/\D/g,"")||0;
 vp.addEventListener("input",e=>{const t=e.target;
   if(t.id==="prodQ"){prodQ=t.value;const p=t.selectionStart;renderProductos();const n=$("#prodQ");n.focus();n.setSelectionRange(p,p)}
-  if(t.id==="pPrecio")$("#pHint").textContent="Transferencia: "+money(transf(onlyNum(t.value)))+" (25% menos)";
+  if(t.id==="pPrecio")$("#pHint").textContent="Transferencia: "+money(transf(onlyNum(t.value)));
   if(t.id==="sCant")movD.cant=t.value.replace(/\D/g,"");if(t.id==="sNota")movD.nota=t.value});
 function leerForm(){
   const d={nombre:$("#pNombre").value.trim(),precio:onlyNum($("#pPrecio").value),notas:$("#pNotas").value.trim()};
@@ -1199,6 +1215,110 @@ vp.addEventListener("click",async e=>{
     b.disabled=false;toast(n+" producto"+(n===1?"":"s")+" cargado"+(n===1?"":"s"));}
 });
 vp.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.ep)e.target.click()});
+
+/* ---------- OS: precios y márgenes ----------
+   Regla: transferencia = costo × (1 + margen%) + fijo. Tarjeta = transferencia + recargo%.
+   Los cambios quedan en borrador (pcD) hasta tocar Guardar: nada se escribe mientras se edita.
+   oferta:true protege el precio de los cambios en lote. precioWeb = último precio subido a la página. */
+let pcF="Todos", pcQ="", pcD=new Map(), pcLote="", pcArm=false;
+const pcCfg=()=>({margen:50,fijo:2000,recargo:33.33,...precioCfg});
+const pcRed=n=>Math.round(n/100)*100;
+const pcTarjeta=t=>pcRed(t/factorT());
+const pcRegla=(c,m)=>{const k=pcCfg();return pcTarjeta(c*(1+(m===undefined?+k.margen:m)/100)+(+k.fijo))};
+const pcPct=(c,p)=>c>0&&p>0?Math.round(((transf(p)-(+pcCfg().fijo))/c-1)*100):"";
+const pcVal=p=>({costo:+p.costo||0,precio:+p.precio||0,oferta:!!p.oferta,...pcD.get(p.id)});
+function pcSet(p,patch){const v={...pcVal(p),...patch};
+  if(v.costo===(+p.costo||0)&&v.precio===(+p.precio||0)&&v.oferta===!!p.oferta)pcD.delete(p.id);else pcD.set(p.id,v)}
+const pcPend=p=>p.precioWeb!==undefined&&+p.precioWeb!==+p.precio;
+const pcFuera=p=>{const v=pcVal(p),x=pcPct(v.costo,v.precio);return x!==""&&!v.oferta&&Math.abs(x-(+pcCfg().margen))>5};
+const pcEnWeb=()=>productos.filter(p=>p.webPub!==false);
+function pcLista(){const q=norm(pcQ);let l=pcEnWeb().filter(p=>!q||norm(p.nombre).includes(q)||norm(p.sku).includes(q));
+  if(pcF==="Fuera de regla")l=l.filter(pcFuera);
+  if(pcF==="Ofertas")l=l.filter(p=>pcVal(p).oferta);
+  if(pcF==="Costo estimado")l=l.filter(p=>p.costoOrigen==="estimado");
+  if(pcF==="Sin subir a la web")l=l.filter(pcPend);
+  if(pcF==="Con cambios")l=l.filter(p=>pcD.has(p.id));
+  return l}
+function pcFila(p){const v=pcVal(p),tags=[];
+  if(p.costoOrigen==="estimado")tags.push(`<span class="pill warn">Costo estimado</span>`);
+  if(pcPend(p))tags.push(`<span class="pill warn">Sin subir a la web</span>`);
+  return `<div class="pcrow" data-pc="${p.id}"><div class="pcn"><b>${esc(p.nombre)}</b> ${tags.join(" ")}</div>
+    <label class="f">Costo<input data-k="costo" inputmode="numeric" class="num" value="${v.costo||""}"></label>
+    <label class="f">% ganancia<input data-k="pct" inputmode="numeric" class="num" value="${pcPct(v.costo,v.precio)}"></label>
+    <label class="f">Transferencia<input data-k="transf" inputmode="numeric" class="num" value="${transf(v.precio)||""}"></label>
+    <label class="f">Tarjeta<input data-k="precio" inputmode="numeric" class="num" value="${v.precio||""}"></label>
+    <label class="chk pco"><input type="checkbox" data-k="oferta" ${v.oferta?"checked":""}> Oferta</label></div>`}
+function pcBarTxt(){const n=pcD.size;return `${n} ${plural(n,"cambio","cambios")} sin guardar`}
+function renderPrecios(){const k=pcCfg(),l=pcLista(),web=pcEnWeb(),pend=web.filter(pcPend).length;
+  const con=web.filter(p=>+p.costo>0&&+p.precio>0),prom=con.length?Math.round(con.reduce((a,p)=>a+pcPct(+p.costo,+p.precio),0)/con.length):0;
+  $("#v-productos").innerHTML=`${prodChips()}
+  <div class="tiles">
+    <div class="tile hero"><span class="lbl">Ganancia promedio</span><b class="num">${prom}%</b><small>sobre costo, además de los ${money(k.fijo)}</small></div>
+    <div class="tile"><span class="lbl">Fuera de la regla</span><b class="num">${web.filter(pcFuera).length}</b><small>sin contar ofertas</small></div>
+    <div class="tile"><span class="lbl">Ofertas</span><b class="num">${web.filter(p=>p.oferta).length}</b><small>no cambian en lote</small></div>
+    <div class="tile"><span class="lbl">Sin subir a la web</span><b class="num">${pend}</b><small>precios por pasar</small></div>
+  </div>
+  <div class="card"><h2>Tu regla de precios</h2>
+    <div class="more3"><label class="f">Ganancia sobre costo (%)<input id="pcM" inputmode="decimal" class="num" value="${k.margen}"></label>
+    <label class="f">Monto fijo ($)<input id="pcFijo" inputmode="numeric" class="num" value="${k.fijo}"></label>
+    <label class="f">Recargo tarjeta (%)<input id="pcR" inputmode="decimal" class="num" value="${k.recargo}"></label></div>
+    <div class="hint">Transferencia = costo + ${k.margen}% + ${money(k.fijo)}. Tarjeta = transferencia + ${k.recargo}%.</div>
+    <div class="row"><button class="ghost" id="pcSaveCfg">Guardar regla</button></div></div>
+  <div class="card"><h2>Cambiar muchos de una vez</h2>
+    <div class="hint">Se aplica a los ${l.length} productos que ves abajo, menos las ofertas. Nada se guarda hasta que toques Guardar.</div>
+    <div class="row"><button class="secondary" id="pcAplicar">Aplicar la regla</button>
+    <input class="search" id="pcLote" style="flex:0 0 90px" inputmode="decimal" placeholder="%" aria-label="Porcentaje de aumento" value="${esc(pcLote)}">
+    <button class="ghost" id="pcSubeP">Subir precios</button><button class="ghost" id="pcSubeC">Subir costos</button></div></div>
+  <div class="row"><input class="search" id="pcQ" placeholder="Buscar producto" value="${esc(pcQ)}"></div>
+  <div class="chips">${["Todos","Fuera de regla","Ofertas","Costo estimado","Sin subir a la web","Con cambios"].map(c=>`<button class="chip" data-pcf="${c}" aria-pressed="${pcF===c}">${c}</button>`).join("")}</div>
+  ${pend?`<div class="card"><h2>Pasar a la página</h2><div class="hint">${pend} ${plural(pend,"precio cambió","precios cambiaron")} en la app y todavía no ${pend===1?"está":"están"} en Empretienda.</div>
+    <div class="row">${downloads?`<button class="ghost" id="pcCsv">Descargar lista</button>`:""}<button class="ghost" id="pcWeb">${pcArm?"¿Ya están en la página?":"Marcar como subidos"}</button></div></div>`:""}
+  ${l.length?`<div class="pclist">${l.map(pcFila).join("")}</div>`:`<div class="empty">Ningún producto coincide.</div>`}
+  <div class="pcbar" id="pcBar" ${pcD.size?"":"hidden"}><span id="pcBarT">${pcBarTxt()}</span><button class="ghost" id="pcDesc">Descartar</button><button class="primary" id="pcSave" style="width:auto">Guardar</button></div>`}
+function pcBar(){const b=$("#pcBar");if(!b)return;b.hidden=!pcD.size;$("#pcBarT").textContent=pcBarTxt()}
+const pcNum=s=>{const n=parseFloat(String(s||"").replace(",","."));return isNaN(n)?0:n};
+vp.addEventListener("input",e=>{const t=e.target;
+  if(t.id==="pcQ"){pcQ=t.value;const c=t.selectionStart;renderPrecios();const n=$("#pcQ");n.focus();n.setSelectionRange(c,c);return}
+  if(t.id==="pcLote"){pcLote=t.value;return}
+  const r=t.closest("[data-pc]"),k=t.dataset.k;if(!r||!k||k==="oferta")return;
+  const p=productos.find(x=>x.id===r.dataset.pc);if(!p)return;
+  const v=pcVal(p),n=onlyNum(t.value),fijo=+pcCfg().fijo;let c=v.costo,pr=v.precio;
+  if(k==="costo"){const x=pcPct(c,pr);c=n;if(!v.oferta&&x!==""&&c>0)pr=pcRegla(c,x)}
+  if(k==="pct"&&c>0)pr=pcRegla(c,n);
+  if(k==="transf")pr=pcTarjeta(n);
+  if(k==="precio")pr=n;
+  pcSet(p,{costo:c,precio:pr});
+  const put=(q,val)=>{if(q!==k)r.querySelector(`[data-k="${q}"]`).value=val};
+  put("costo",c||"");put("pct",pcPct(c,pr));put("transf",transf(pr)||"");put("precio",pr||"");pcBar()});
+vp.addEventListener("change",e=>{const t=e.target;if(t.dataset.k!=="oferta")return;
+  const p=productos.find(x=>x.id===t.closest("[data-pc]").dataset.pc);if(p){pcSet(p,{oferta:t.checked});pcBar()}});
+async function pcGuardar(){const ids=[...pcD.keys()];let n=0;
+  const ok=await guard(async()=>{for(let i=0;i<ids.length;i+=25)await Promise.all(ids.slice(i,i+25).map(async id=>{const p=productos.find(x=>x.id===id),v=pcD.get(id);if(!p)return;
+    const d={costo:v.costo,precio:v.precio,oferta:v.oferta};if(v.costo!==(+p.costo||0))d.costoOrigen="manual";
+    await db.doc("productos/"+id).update(d);if(v.precio!==(+p.precio||0))await logPrecio(id,+p.precio||0,v.precio);n++}))},"Precios guardados");
+  if(ok){pcD.clear();renderPrecios()}}
+vp.addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;const dd=b.dataset;
+  if(dd.pvw){prodV=dd.pvw;renderProductos();return}
+  if(dd.pcf){pcF=dd.pcf;renderPrecios();return}
+  const lote=()=>pcLista().filter(p=>!pcVal(p).oferta);
+  if(b.id==="pcSaveCfg"){const m=pcNum($("#pcM").value),r=pcNum($("#pcR").value),f=onlyNum($("#pcFijo").value);
+    if(!(r>-100)){toast("Revisá el recargo");return}
+    guard(()=>db.doc("config/precios").set({margen:m,fijo:f,recargo:r}),"Regla guardada")}
+  else if(b.id==="pcAplicar"){let n=0;lote().forEach(p=>{const v=pcVal(p);if(v.costo>0){pcSet(p,{precio:pcRegla(v.costo)});n++}});renderPrecios();toast(n+" "+plural(n,"precio recalculado","precios recalculados")+". Falta guardar")}
+  else if(b.id==="pcSubeP"||b.id==="pcSubeC"){const x=pcNum(pcLote);if(!x){toast("Poné el porcentaje");return}let n=0;
+    lote().forEach(p=>{const v=pcVal(p);
+      if(b.id==="pcSubeP"){if(v.precio>0){pcSet(p,{precio:pcRed(v.precio*(1+x/100))});n++}}
+      else if(v.costo>0){const g=pcPct(v.costo,v.precio),c=Math.round(v.costo*(1+x/100));pcSet(p,{costo:c,precio:g===""?v.precio:pcRegla(c,g)});n++}});
+    renderPrecios();toast(n+" "+plural(n,"producto cambiado","productos cambiados")+". Falta guardar")}
+  else if(b.id==="pcDesc"){pcD.clear();renderPrecios()}
+  else if(b.id==="pcSave")pcGuardar();
+  else if(b.id==="pcWeb"){if(!pcArm){pcArm=true;renderPrecios();return}pcArm=false;const l=productos.filter(pcPend);
+    guard(async()=>{for(let i=0;i<l.length;i+=25)await Promise.all(l.slice(i,i+25).map(p=>db.doc("productos/"+p.id).update({precioWeb:+p.precio})))},"Marcados como subidos")}
+  else if(b.id==="pcCsv"){const rows=[["Producto","Precio en la web","Precio nuevo tarjeta","Precio nuevo transferencia"]];
+    productos.filter(pcPend).forEach(p=>rows.push([p.nombre,p.precioWeb,p.precio,transf(p.precio)]));
+    const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c??"").replace(/"/g,'""')+'"').join(";")).join("\n");
+    try{await downloads.save({filename:"precios-para-la-pagina.csv",data:new Blob([csv],{type:"text/csv"})})}catch(_){toast("No se descargó el archivo")}}
+});
 
 /* ---------- OS: finanzas ----------
    Cuatro números distintos, que no se mezclan:
@@ -2238,7 +2358,7 @@ vm.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.pe)e.targ
    Las reglas se evalúan al abrir la app: no hay un proceso en segundo plano.
    Ninguna regla envía mensajes ni mueve plata: solo avisan adentro del sistema. */
 let autoCfg={reglas:{},margenMin:30,diasCobro:7,diasPago:3}, auV="Reglas", auEdit=false, bellOpen=false;
-function initAuto(){db.doc("config/automatizaciones").onSnapshot(s=>{autoCfg={reglas:{},margenMin:30,diasCobro:7,diasPago:3,...(s.exists?s.data():{})};renderAll()},()=>{})}
+function initAuto(){db.doc("config/precios").onSnapshot(s=>{precioCfg=s.exists?s.data():{};renderAll()},()=>{});db.doc("config/automatizaciones").onSnapshot(s=>{autoCfg={reglas:{},margenMin:30,diasCobro:7,diasPago:3,...(s.exists?s.data():{})};renderAll()},()=>{})}
 const plural=(n,a,b)=>n===1?a:b;
 const REGLAS=[
   {k:"stock",t:"Stock bajo",d:"Productos con control en stock mínimo o menos.",fn:()=>{const sm=stockMap(),n=productos.filter(p=>{const x=sm.get(p.id);return x&&x.disp<=(+p.stockMin||0)}).length;return n?[["productos","Stock bajo",`${n} ${plural(n,"producto","productos")} para reponer`,"bad"]]:[]}},
@@ -2251,7 +2371,7 @@ const REGLAS=[
   {k:"cumples",t:"Cumpleaños",d:"Clientes que cumplen en los próximos 7 días.",fn:()=>{const n=fichas.filter(f=>cumpleEn(f.cumple,7)).length;return n?[["clientes","Seguimientos",`${n} cumpleaños esta semana`,""]]:[]}},
   {k:"presupuestos",t:"Presupuestos vencidos",d:"Presupuestos sin respuesta pasada su validez.",fn:()=>{const n=documentos.filter(d=>docEstado(d)==="Vencido").length;return n?[["cotizador","",`${n} ${plural(n,"presupuesto vencido","presupuestos vencidos")} sin respuesta`,""]]:[]}},
   {k:"objetivos",t:"Objetivos cerca",d:"Avisa al llegar al 80% del objetivo de facturación del mes.",fn:()=>{const o=+objetivos.facturacion||0;if(!o)return[];const ym=today().slice(0,7),f=statsDe(ventasEn(ym+"-01",today())).fact,p=f/o;return p>=.8&&p<1?[["inicio","",`Vas ${Math.round(p*100)}% del objetivo del mes`,"ok"]]:[]}},
-  {k:"rentabilidad",t:"Productos poco rentables",d:"Productos cuyo margen en transferencia queda debajo del mínimo.",fn:()=>{const m=+autoCfg.margenMin||0,n=productos.filter(p=>{const c=+p.costo,pr=transf(p.precio);return c>0&&pr>0&&(pr-c)/pr*100<m}).length;return n?[["productos","Poco rentables",`${n} ${plural(n,"producto","productos")} con margen menor a ${m}%`,""]]:[]}},
+  {k:"rentabilidad",t:"Productos poco rentables",d:"Productos cuyo margen en transferencia queda debajo del mínimo.",fn:()=>{const m=+autoCfg.margenMin||0,n=productos.filter(p=>{const c=+p.costo,pr=transf(p.precio);return !p.oferta&&c>0&&pr>0&&(pr-c)/pr*100<m}).length;return n?[["productos","Poco rentables",`${n} ${plural(n,"producto","productos")} con margen menor a ${m}%`,""]]:[]}},
   {k:"costos",t:"Costos faltantes",d:"Productos sin costo cargado.",fn:()=>{const n=productos.filter(p=>!(+p.costo>0)).length;return n&&productos.length?[["productos","Sin costo",`${n} de ${productos.length} productos sin costo: la ganancia no se puede calcular completa`,""]]:[]}}
 ];
 const reglaOn=k=>autoCfg.reglas?.[k]!==false;
