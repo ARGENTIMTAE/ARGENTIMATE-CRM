@@ -493,6 +493,7 @@ const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth
 let precioCfg={};
 const factorT=()=>{const r=precioCfg.recargo===undefined?33.33:+precioCfg.recargo;return Math.abs(r-33.33)<.01?.75:1/(1+r/100)};
 const transf=p=>Math.round((p||0)*factorT()/100)*100;
+const transfP=p=>+(p&&p.precioT)||transf(p&&p.precio);
 const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim();
 function store(k,v){try{if(v===undefined){return JSON.parse(localStorage.getItem(k)||"null")}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
 
@@ -620,7 +621,7 @@ async function exportCSV(){
 
 /* ---------- nueva venta ---------- */
 function saveDraft(){if(!editingId)store("argv-draft",form)}
-function priceFor(p){return form.medio==="Tarjeta / MP"?Math.round(p.precio||0):transf(p.precio)}
+function priceFor(p){return form.medio==="Tarjeta / MP"?Math.round(p.precio||0):transfP(p)}
 function renderNueva(){
   const el=$("#v-nueva");
   const names=[...new Map(ventas.filter(v=>v.nombre).map(v=>[norm(v.nombre),v])).values()];
@@ -1127,7 +1128,7 @@ function renderProductos(){
   if(prodF==="Stock bajo")list=list.filter(p=>low(p)||out(p));
   if(prodF==="Agotados")list=list.filter(out);
   if(prodF==="Sin costo")list=list.filter(p=>!(+p.costo>0));
-  if(prodF==="Poco rentables")list=list.filter(p=>{const c=+p.costo,pr=transf(p.precio);return !p.oferta&&c>0&&pr>0&&(pr-c)/pr*100<(+autoCfg.margenMin||0)});
+  if(prodF==="Poco rentables")list=list.filter(p=>{const c=+p.costo,pr=transfP(p);return !p.oferta&&c>0&&pr>0&&(pr-c)/pr*100<(+autoCfg.margenMin||0)});
   const valor=productos.reduce((a,p)=>{const x=sm.get(p.id);return a+(x&&x.fisico>0?x.fisico*(+p.costo||0):0)},0);
   const hist=ep?[...stockMovs.filter(s=>s.pid===ep.id).map(s=>({f:s.fecha,c:s.creado,t:`${s.tipo==="ajuste"?"Ajuste":s.tipo==="entrada"?"Entrada":"Salida"}${s.nota?" · "+s.nota:""}`,n:(s.cant>0?"+":"−")+Math.abs(s.cant)})),
     ...preciosHist.filter(s=>s.pid===ep.id).map(s=>({f:s.fecha,c:s.creado,t:"Precio tarjeta",n:`${money(s.antes)} → ${money(s.despues)}`}))].sort((a,b)=>b.c-a.c).slice(0,8):[];
@@ -1142,7 +1143,7 @@ function renderProductos(){
   <div class="card"><h2>${ep?"Editar producto":"Agregar producto"}</h2>
     <div class="prodedit"><label class="f">Nombre<input id="pNombre" value="${esc(ep?.nombre||"")}"></label>
     <label class="f">Precio tarjeta<input id="pPrecio" inputmode="numeric" class="num" value="${ep?.precio||""}"></label></div>
-    <div class="hint" id="pHint">Transferencia: ${money(transf(ep?.precio))}</div>
+    <div class="hint" id="pHint">Transferencia: ${money(transfP(ep))}</div>
     <details ${ep?"open":""}><summary><b>Costos, stock y detalles</b></summary>
       <div class="more3" style="margin-top:10px">
         ${PNUM.map(([k,l])=>`<label class="f">${l}<input data-pn="${k}" inputmode="numeric" class="num" value="${+ep?.[k]||""}"></label>`).join("")}
@@ -1150,7 +1151,7 @@ function renderProductos(){
         ${PTXT.map(([k,l])=>`<label class="f">${l}<input data-pt="${k}" value="${esc(ep?.[k]||"")}"></label>`).join("")}
       </div>
       <label class="f" style="margin-top:10px">Descripción y observaciones<textarea id="pNotas" rows="2">${esc(ep?.notas||"")}</textarea></label>
-      ${ep&&+ep.costo>0?`<div class="hint">Margen sobre costo: tarjeta ${margenTxt(+ep.costo,+ep.precio)} · transferencia ${margenTxt(+ep.costo,transf(ep.precio))}${+ep.precioML?" · Mercado Libre "+margenTxt(+ep.costo,+ep.precioML):""}. No incluye comisiones ni packaging.</div>`:""}
+      ${ep&&+ep.costo>0?`<div class="hint">Margen sobre costo: tarjeta ${margenTxt(+ep.costo,+ep.precio)} · transferencia ${margenTxt(+ep.costo,transfP(ep))}${+ep.precioML?" · Mercado Libre "+margenTxt(+ep.costo,+ep.precioML):""}. No incluye comisiones ni packaging.</div>`:""}
     </details>
     <div class="row"><button class="secondary" id="pSave">${ep?"Guardar":"Agregar"}</button>${ep?`<button class="ghost" id="pCancel">Cancelar</button><span style="flex:1"></span><button class="ghost danger" id="pDel">${delArm==="p"+ep.id?"Tocá de nuevo para borrar":"Borrar"}</button>`:""}</div>
   </div>
@@ -1167,7 +1168,7 @@ function renderProductos(){
   <div class="row"><input class="search" id="prodQ" placeholder="Buscar en ${productos.length} productos, SKU o categoría" value="${esc(prodQ)}"></div>
   <div class="chips">${["Todos","Stock bajo","Agotados","Sin costo","Poco rentables"].map(c=>`<button class="chip" data-pf="${c}" aria-pressed="${prodF===c}">${c}</button>`).join("")}${downloads?`<button class="ghost" id="pCsv">Exportar inventario (CSV)</button>`:""}</div>
   ${list.length?`<div class="list">${list.map(p=>{const x=sm.get(p.id);const tag=!x?"":x.disp<=0?`<span class="pill bad">Agotado</span>`:x.disp<=(+p.stockMin||0)?`<span class="pill warn">Stock ${x.disp}</span>`:`<span class="pill ok">Stock ${x.disp}</span>`;
-    return `<div class="li" data-ep="${p.id}" role="button" tabindex="0"><div class="m"><b>${esc(p.nombre)}</b><small>${[p.sku,p.categoria].filter(Boolean).map(esc).join(" · ")||"Tocá para editar"}</small> ${tag}</div><div class="r"><b class="num">${money(transf(p.precio))}</b><small class="num">tarjeta ${money(p.precio)}</small></div></div>`}).join("")}</div>`
+    return `<div class="li" data-ep="${p.id}" role="button" tabindex="0"><div class="m"><b>${esc(p.nombre)}</b><small>${[p.sku,p.categoria].filter(Boolean).map(esc).join(" · ")||"Tocá para editar"}</small> ${tag}</div><div class="r"><b class="num">${money(transfP(p))}</b><small class="num">tarjeta ${money(p.precio)}</small></div></div>`}).join("")}</div>`
   :`<div class="empty">${productos.length?"Ningún producto coincide.":"Agregá tus productos para buscarlos rápido al cargar una venta."}</div>`}`;
 }
 const vp=$("#v-productos");
@@ -1202,7 +1203,7 @@ vp.addEventListener("click",async e=>{
     if(!cant){toast("No hay diferencia para registrar");return}
     if(await guard(()=>db.collection("stock_movs").add({pid:editProd.id,tipo:movD.tipo,cant,nota:movD.nota.trim(),fecha:today(),creado:Date.now()}),"Stock actualizado")){movD={tipo:movD.tipo,cant:"",nota:""};renderProductos()}}
   else if(b.id==="pCsv"){const sm=stockMap();const rows=[["Producto","SKU","Categoría","Proveedor","Costo","Precio tarjeta","Precio transferencia","Precio ML","Físico","Reservado","Disponible","Stock mínimo"]];
-    productos.forEach(p=>{const x=sm.get(p.id);rows.push([p.nombre,p.sku,p.categoria,p.proveedor,p.costo||"",p.precio,transf(p.precio),p.precioML||"",x?.fisico??"",x?.res??"",x?.disp??"",p.stockMin||""])});
+    productos.forEach(p=>{const x=sm.get(p.id);rows.push([p.nombre,p.sku,p.categoria,p.proveedor,p.costo||"",p.precio,transfP(p),p.precioML||"",x?.fisico??"",x?.res??"",x?.disp??"",p.stockMin||""])});
     const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c??"").replace(/"/g,'""')+'"').join(";")).join("\n");
     try{await downloads.save({filename:"inventario-argentimate.csv",data:new Blob([csv],{type:"text/csv"})})}catch(_){toast("No se descargó el archivo")}}
   else if(b.id==="bulkBtn"){const lines=$("#bulkTxt").value.split("\n").map(l=>l.split(/[;\t]/).map(x=>x.trim())).filter(p=>p[0]);
@@ -1225,12 +1226,12 @@ const pcCfg=()=>({margen:50,fijo:2000,recargo:33.33,...precioCfg});
 const pcRed=n=>Math.round(n/100)*100;
 const pcTarjeta=t=>pcRed(t/factorT());
 const pcRegla=(c,m)=>{const k=pcCfg();return pcTarjeta(c*(1+(m===undefined?+k.margen:m)/100)+(+k.fijo))};
-const pcPct=(c,p)=>c>0&&p>0?Math.round(((transf(p)-(+pcCfg().fijo))/c-1)*100):"";
-const pcVal=p=>({costo:+p.costo||0,precio:+p.precio||0,oferta:!!p.oferta,...pcD.get(p.id)});
+const pcPct=(c,p,t)=>c>0&&p>0?Math.round((((+t||transf(p))-(+pcCfg().fijo))/c-1)*100):"";
+const pcVal=p=>({costo:+p.costo||0,precio:+p.precio||0,precioT:+p.precioT||0,oferta:!!p.oferta,...pcD.get(p.id)});
 function pcSet(p,patch){const v={...pcVal(p),...patch};
-  if(v.costo===(+p.costo||0)&&v.precio===(+p.precio||0)&&v.oferta===!!p.oferta)pcD.delete(p.id);else pcD.set(p.id,v)}
+  if(v.costo===(+p.costo||0)&&v.precio===(+p.precio||0)&&v.precioT===(+p.precioT||0)&&v.oferta===!!p.oferta)pcD.delete(p.id);else pcD.set(p.id,v)}
 const pcPend=p=>p.precioWeb!==undefined&&+p.precioWeb!==+p.precio;
-const pcFuera=p=>{const v=pcVal(p),x=pcPct(v.costo,v.precio);return x!==""&&!v.oferta&&Math.abs(x-(+pcCfg().margen))>5};
+const pcFuera=p=>{const v=pcVal(p),x=pcPct(v.costo,v.precio,v.precioT);return x!==""&&!v.oferta&&Math.abs(x-(+pcCfg().margen))>5};
 const pcEnWeb=()=>productos.filter(p=>p.webPub!==false);
 function pcLista(){const q=norm(pcQ);let l=pcEnWeb().filter(p=>!q||norm(p.nombre).includes(q)||norm(p.sku).includes(q));
   if(pcF==="Fuera de regla")l=l.filter(pcFuera);
@@ -1244,13 +1245,13 @@ function pcFila(p){const v=pcVal(p),tags=[];
   if(pcPend(p))tags.push(`<span class="pill warn">Sin subir a la web</span>`);
   return `<div class="pcrow" data-pc="${p.id}"><div class="pcn"><b>${esc(p.nombre)}</b> ${tags.join(" ")}</div>
     <label class="f">Costo<input data-k="costo" inputmode="numeric" class="num" value="${v.costo||""}"></label>
-    <label class="f">% ganancia<input data-k="pct" inputmode="numeric" class="num" value="${pcPct(v.costo,v.precio)}"></label>
-    <label class="f">Transferencia<input data-k="transf" inputmode="numeric" class="num" value="${transf(v.precio)||""}"></label>
+    <label class="f">% ganancia<input data-k="pct" inputmode="numeric" class="num" value="${pcPct(v.costo,v.precio,v.precioT)}"></label>
+    <label class="f">Transferencia<input data-k="transf" inputmode="numeric" class="num" value="${v.precioT||transf(v.precio)||""}"></label>
     <label class="f">Tarjeta<input data-k="precio" inputmode="numeric" class="num" value="${v.precio||""}"></label>
     <label class="chk pco"><input type="checkbox" data-k="oferta" ${v.oferta?"checked":""}> Oferta</label></div>`}
 function pcBarTxt(){const n=pcD.size;return `${n} ${plural(n,"cambio","cambios")} sin guardar`}
 function renderPrecios(){const k=pcCfg(),l=pcLista(),web=pcEnWeb(),pend=web.filter(pcPend).length;
-  const con=web.filter(p=>+p.costo>0&&+p.precio>0),prom=con.length?Math.round(con.reduce((a,p)=>a+pcPct(+p.costo,+p.precio),0)/con.length):0;
+  const con=web.filter(p=>+p.costo>0&&+p.precio>0),prom=con.length?Math.round(con.reduce((a,p)=>a+pcPct(+p.costo,+p.precio,p.precioT),0)/con.length):0;
   $("#v-productos").innerHTML=`${prodChips()}
   <div class="tiles">
     <div class="tile hero"><span class="lbl">Ganancia promedio</span><b class="num">${prom}%</b><small>sobre costo, además de los ${money(k.fijo)}</small></div>
@@ -1282,19 +1283,19 @@ vp.addEventListener("input",e=>{const t=e.target;
   if(t.id==="pcLote"){pcLote=t.value;return}
   const r=t.closest("[data-pc]"),k=t.dataset.k;if(!r||!k||k==="oferta")return;
   const p=productos.find(x=>x.id===r.dataset.pc);if(!p)return;
-  const v=pcVal(p),n=onlyNum(t.value),fijo=+pcCfg().fijo;let c=v.costo,pr=v.precio;
-  if(k==="costo"){const x=pcPct(c,pr);c=n;if(!v.oferta&&x!==""&&c>0)pr=pcRegla(c,x)}
-  if(k==="pct"&&c>0)pr=pcRegla(c,n);
-  if(k==="transf")pr=pcTarjeta(n);
+  const v=pcVal(p),n=onlyNum(t.value),fijo=+pcCfg().fijo;let c=v.costo,pr=v.precio,pt=v.precioT;
+  if(k==="costo"){const x=pcPct(c,pr,pt);c=n;if(!v.oferta&&!pt&&x!==""&&c>0)pr=pcRegla(c,x)}
+  if(k==="pct"&&c>0){if(pt)pt=Math.round(c*(1+n/100)+fijo);else pr=pcRegla(c,n)}
+  if(k==="transf"){if(pt)pt=n;else pr=pcTarjeta(n)}
   if(k==="precio")pr=n;
-  pcSet(p,{costo:c,precio:pr});
+  pcSet(p,{costo:c,precio:pr,precioT:pt});
   const put=(q,val)=>{if(q!==k)r.querySelector(`[data-k="${q}"]`).value=val};
-  put("costo",c||"");put("pct",pcPct(c,pr));put("transf",transf(pr)||"");put("precio",pr||"");pcBar()});
+  put("costo",c||"");put("pct",pcPct(c,pr,pt));put("transf",pt||transf(pr)||"");put("precio",pr||"");pcBar()});
 vp.addEventListener("change",e=>{const t=e.target;if(t.dataset.k!=="oferta")return;
   const p=productos.find(x=>x.id===t.closest("[data-pc]").dataset.pc);if(p){pcSet(p,{oferta:t.checked});pcBar()}});
 async function pcGuardar(){const ids=[...pcD.keys()];let n=0;
   const ok=await guard(async()=>{for(let i=0;i<ids.length;i+=25)await Promise.all(ids.slice(i,i+25).map(async id=>{const p=productos.find(x=>x.id===id),v=pcD.get(id);if(!p)return;
-    const d={costo:v.costo,precio:v.precio,oferta:v.oferta};if(v.costo!==(+p.costo||0))d.costoOrigen="manual";
+    const d={costo:v.costo,precio:v.precio,oferta:v.oferta};if(v.precioT)d.precioT=v.precioT;if(v.costo!==(+p.costo||0))d.costoOrigen="manual";
     await db.doc("productos/"+id).update(d);if(v.precio!==(+p.precio||0))await logPrecio(id,+p.precio||0,v.precio);n++}))},"Precios guardados");
   if(ok){pcD.clear();renderPrecios()}}
 vp.addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;const dd=b.dataset;
@@ -1315,7 +1316,7 @@ vp.addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)r
   else if(b.id==="pcWeb"){if(!pcArm){pcArm=true;renderPrecios();return}pcArm=false;const l=productos.filter(pcPend);
     guard(async()=>{for(let i=0;i<l.length;i+=25)await Promise.all(l.slice(i,i+25).map(p=>db.doc("productos/"+p.id).update({precioWeb:+p.precio})))},"Marcados como subidos")}
   else if(b.id==="pcCsv"){const rows=[["Producto","Precio en la web","Precio nuevo tarjeta","Precio nuevo transferencia"]];
-    productos.filter(pcPend).forEach(p=>rows.push([p.nombre,p.precioWeb,p.precio,transf(p.precio)]));
+    productos.filter(pcPend).forEach(p=>rows.push([p.nombre,p.precioWeb,p.precio,transfP(p)]));
     const csv="﻿"+rows.map(r=>r.map(c=>'"'+String(c??"").replace(/"/g,'""')+'"').join(";")).join("\n");
     try{await downloads.save({filename:"precios-para-la-pagina.csv",data:new Blob([csv],{type:"text/csv"})})}catch(_){toast("No se descargó el archivo")}}
 });
@@ -1930,7 +1931,7 @@ const docTotal=d=>docSub(d)+(+d.envio||0)-(+d.descuento||0);
 const docVence=d=>d.tipo==="Presupuesto"&&+d.validez?addDays(d.fecha,+d.validez):"";
 const docEstado=d=>d.tipo==="Presupuesto"&&["Borrador","Enviado"].includes(d.estado)&&docVence(d)&&docVence(d)<today()?"Vencido":d.estado;
 function proxNumero(tipo){const p=DOC_TIPOS[tipo];const n=documentos.filter(d=>d.tipo===tipo).reduce((a,d)=>Math.max(a,+String(d.numero||"").split("-")[1]||0),0)+1;return p+"-"+String(n).padStart(4,"0")}
-const precioLista=p=>cotD.lista==="Tarjeta"?Math.round(p.precio||0):transf(p.precio);
+const precioLista=p=>cotD.lista==="Tarjeta"?Math.round(p.precio||0):transfP(p);
 const fLarga=f=>f?new Date(f+"T12:00").toLocaleDateString("es-AR"):"";
 function docTexto(d){
   const L=[`*${d.tipo.toUpperCase()} ${d.numero||""}*`.trim(),`${cotCfg.nombre} · ${fLarga(d.fecha)}`,""];
@@ -2371,7 +2372,7 @@ const REGLAS=[
   {k:"cumples",t:"Cumpleaños",d:"Clientes que cumplen en los próximos 7 días.",fn:()=>{const n=fichas.filter(f=>cumpleEn(f.cumple,7)).length;return n?[["clientes","Seguimientos",`${n} cumpleaños esta semana`,""]]:[]}},
   {k:"presupuestos",t:"Presupuestos vencidos",d:"Presupuestos sin respuesta pasada su validez.",fn:()=>{const n=documentos.filter(d=>docEstado(d)==="Vencido").length;return n?[["cotizador","",`${n} ${plural(n,"presupuesto vencido","presupuestos vencidos")} sin respuesta`,""]]:[]}},
   {k:"objetivos",t:"Objetivos cerca",d:"Avisa al llegar al 80% del objetivo de facturación del mes.",fn:()=>{const o=+objetivos.facturacion||0;if(!o)return[];const ym=today().slice(0,7),f=statsDe(ventasEn(ym+"-01",today())).fact,p=f/o;return p>=.8&&p<1?[["inicio","",`Vas ${Math.round(p*100)}% del objetivo del mes`,"ok"]]:[]}},
-  {k:"rentabilidad",t:"Productos poco rentables",d:"Productos cuyo margen en transferencia queda debajo del mínimo.",fn:()=>{const m=+autoCfg.margenMin||0,n=productos.filter(p=>{const c=+p.costo,pr=transf(p.precio);return !p.oferta&&c>0&&pr>0&&(pr-c)/pr*100<m}).length;return n?[["productos","Poco rentables",`${n} ${plural(n,"producto","productos")} con margen menor a ${m}%`,""]]:[]}},
+  {k:"rentabilidad",t:"Productos poco rentables",d:"Productos cuyo margen en transferencia queda debajo del mínimo.",fn:()=>{const m=+autoCfg.margenMin||0,n=productos.filter(p=>{const c=+p.costo,pr=transfP(p);return !p.oferta&&c>0&&pr>0&&(pr-c)/pr*100<m}).length;return n?[["productos","Poco rentables",`${n} ${plural(n,"producto","productos")} con margen menor a ${m}%`,""]]:[]}},
   {k:"costos",t:"Costos faltantes",d:"Productos sin costo cargado.",fn:()=>{const n=productos.filter(p=>!(+p.costo>0)).length;return n&&productos.length?[["productos","Sin costo",`${n} de ${productos.length} productos sin costo: la ganancia no se puede calcular completa`,""]]:[]}}
 ];
 const reglaOn=k=>autoCfg.reglas?.[k]!==false;
@@ -2436,7 +2437,7 @@ const CONSULTAS={
   ganancia:{q:"¿Cuánto ganamos este mes?",fn(){const f=flujoMes(mesAct());
     return {texto:f.fact?(f.falta?`Facturaste ${money(f.fact)}, pero no puedo darte la ganancia exacta: faltan costos en ${f.falta} ítem${f.falta>1?"s":""}. Con lo cargado, la cuenta da ${firmado(f.utilidad)} y es mayor que la real.`:`La utilidad estimada del mes es ${firmado(f.utilidad)}.`):"Todavía no hay ventas este mes, así que no hay ganancia para calcular.",
       filas:[["Facturación",money(f.fact)],["Costo de productos",money(f.costo)],["Gastos sin retiros",money(f.gastos)],["Cobrado",money(f.cobrado)],["Flujo de caja",firmado(f.neto)]],fuente:"Ventas del mes − costo de productos − gastos de Caja, sin retiros personales ni transferencias internas. No incluye comisiones estimadas ni packaging.",falta:f.falta?"Costos de productos vendidos":""}}},
-  margen:{q:"¿Qué producto tiene mejor margen?",fn(){const l=productos.filter(p=>+p.costo>0&&transf(p.precio)>0).map(p=>({n:p.nombre,m:(transf(p.precio)-p.costo)/transf(p.precio)*100,g:transf(p.precio)-p.costo})).sort((a,b)=>b.m-a.m),sc=productos.length-l.length;
+  margen:{q:"¿Qué producto tiene mejor margen?",fn(){const l=productos.filter(p=>+p.costo>0&&transfP(p)>0).map(p=>({n:p.nombre,m:(transfP(p)-p.costo)/transfP(p)*100,g:transfP(p)-p.costo})).sort((a,b)=>b.m-a.m),sc=productos.length-l.length;
     return {texto:l.length?`${l[0].n} tiene el mejor margen: ${Math.round(l[0].m)}%, o sea ${money(l[0].g)} por unidad.`:"No puedo decirlo: ningún producto tiene costo cargado.",filas:l.slice(0,5).map(x=>[x.n,`${Math.round(x.m)}% · ${money(x.g)}`]),fuente:"(Precio transferencia − costo) ÷ precio transferencia. No incluye comisiones ni packaging.",falta:sc?`${sc} productos sin costo`:""}}},
   reponer:{q:"¿Qué tenemos que reponer?",fn(){const sm=stockMap(),im=insStock(),a=productos.filter(p=>{const x=sm.get(p.id);return x&&x.disp<=(+p.stockMin||0)}).map(p=>[p.nombre,`${sm.get(p.id).disp} disponibles, mínimo ${+p.stockMin||0}`]),b=insBajos().map(i=>[i.nombre+" (insumo)",`${im.get(i.id).disp} disponibles, mínimo ${+i.stockMin||0}`]),sc=productos.length-sm.size;
     return {texto:a.length+b.length?`Hay ${a.length+b.length} cosa${a.length+b.length>1?"s":""} para reponer.`:sm.size||insumos.length?"Con lo que está controlado, no hay nada para reponer.":"No puedo decirlo: todavía no hay productos con control de stock.",filas:[...a,...b].slice(0,10),fuente:"Disponible = físico − reservado, comparado con el stock mínimo.",falta:sc?`${sc} productos sin control de stock`:""}}},
@@ -2450,7 +2451,7 @@ const CONSULTAS={
     return {texto:ok.length?`${ok[0].canal} es el más rentable entre los canales con datos completos: ${firmado(ok[0].g)}.`:r.length?"No puedo decirlo: faltan costos en las ventas de todos los canales.":"Todavía no hay ventas este mes.",filas:r.map(c=>[c.canal,c.falta?`${money(c.fact)} facturado, costo incompleto`:`${firmado(c.fact-c.costo-c.com)} de ganancia`]),fuente:"Facturado − costo de productos − comisión de Ajustes en Finanzas.",falta:[inc?`Costos en ${inc} canal${inc>1?"es":""}`:"",r.some(c=>!c.pc)?"Comisiones sin cargar":""].filter(Boolean).join(" · ")}}},
   pedido:{q:"¿Cuánto cuesta preparar un pedido?",fn(){const k=kits.map(x=>[x.nombre,money(kitCosto(x))]),vm=ventas.filter(v=>(v.fecha||"").startsWith(mesAct())&&costoPack(v)>0),p=vm.length?vm.reduce((a,v)=>a+costoPack(v),0)/vm.length:0;
     return {texto:vm.length?`Preparar un pedido costó en promedio ${money(p)} este mes.`:kits.length?"Tus kits ya tienen costo, pero todavía no hay pedidos del mes con kit.":"No puedo decirlo: no hay kits de packaging cargados.",filas:k,fuente:"Costo unitario de insumos × cantidad en cada kit. Es solo packaging.",falta:kits.length?"":"Insumos y kits en Operaciones"}}},
-  promo:{q:"¿Qué productos conviene promocionar?",fn(){const sm=stockMap(),l=productos.filter(p=>+p.costo>0&&transf(p.precio)>0&&(!sm.has(p.id)||sm.get(p.id).disp>(+p.stockMin||0))).map(p=>({n:p.nombre,m:(transf(p.precio)-p.costo)/transf(p.precio)*100,s:sm.get(p.id)?.disp})).sort((a,b)=>b.m-a.m);
+  promo:{q:"¿Qué productos conviene promocionar?",fn(){const sm=stockMap(),l=productos.filter(p=>+p.costo>0&&transfP(p)>0&&(!sm.has(p.id)||sm.get(p.id).disp>(+p.stockMin||0))).map(p=>({n:p.nombre,m:(transfP(p)-p.costo)/transfP(p)*100,s:sm.get(p.id)?.disp})).sort((a,b)=>b.m-a.m);
     return {texto:l.length?`Mirá ${l[0].n}: tiene buen margen y no está en stock bajo.`:"No puedo recomendar: faltan costos de productos.",filas:l.slice(0,5).map(x=>[x.n,`${Math.round(x.m)}%${x.s===undefined?" · sin control de stock":` · ${x.s} disponibles`}`]),fuente:"Productos con costo y sin stock bajo, ordenados por margen. No mira la demanda.",falta:ventas.length?"":"Ventas, para sumar qué se vende mejor"}}}
 };
 function contextoDatos(){

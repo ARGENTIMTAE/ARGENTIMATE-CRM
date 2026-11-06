@@ -1,5 +1,5 @@
 /* Deja la app disponible sin internet. Los datos no pasan por acá: Firebase los guarda aparte. */
-const CACHE = 'argentimate-os-202611052156';
+const CACHE = 'argentimate-os-202611060120';
 const LOCAL = ['./', 'index.html', 'firebase-config.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 const CDN = [
   'https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js',
