@@ -306,15 +306,21 @@
   }
 
   // ---------- detalle del diseño (va en el mensaje y dentro de la imagen) ----------
+  // Posiciones de Argentimate: 1 arriba, 3 derecha, 4 abajo, 2 izquierda (y "entre" en las diagonales)
+  var POS = ['Posición 1', 'Entre 1 y 3', 'Posición 3', 'Entre 3 y 4', 'Posición 4', 'Entre 2 y 4', 'Posición 2', 'Entre 1 y 2'];
+  function sector(ang) { var g = (norm(ang + Math.PI / 2) * 180 / Math.PI + 360 + 22.5) % 360; return Math.floor(g / 45); }
   function lineasDetalle() {
-    var out = [], n = 0, iconos = [];
+    var filas = [];
     st.items.forEach(function (it) {
-      if (it.t === 'text' && it.txt.trim()) { n++; out.push('Texto ' + n + ': "' + it.txt + '" — letra ' + FUENTES[it.fuente].n + ', ' + it.modo + (abajo(it.ang) ? ' (abajo)' : ' (arriba)')); }
-      else if (it.t === 'icon') iconos.push(ICONOS[it.icon].n);
-      else if (it.t === 'img') out.push('Logo propio (va el archivo aparte)');
+      var s = sector(it.ang), d;
+      if (it.t === 'text' && it.txt.trim()) d = '"' + it.txt + '" — letra ' + FUENTES[it.fuente].n + ', ' + it.modo;
+      else if (it.t === 'icon') d = ICONOS[it.icon].n;
+      else if (it.t === 'img') d = 'Logo propio (va el archivo aparte)';
+      if (d) filas.push({ s: s, d: d });
     });
-    if (iconos.length) out.push('Elementos: ' + iconos.join(', '));
-    return out;
+    var orden = [0, 2, 5, 6, 7, 4, 3, 1]; // 1, 1y2, 1y3, 2, 2y4, 3, 3y4, 4
+    filas.sort(function (a, b) { return orden[a.s] - orden[b.s]; });
+    return filas.map(function (f) { return POS[f.s] + ': ' + f.d; });
   }
   function exportar() { // imagen final: virola + detalle escrito abajo
     var ring = document.createElement('canvas'); ring.width = ring.height = 700; dibujar(ring, false);
