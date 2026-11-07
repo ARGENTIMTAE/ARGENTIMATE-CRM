@@ -413,6 +413,7 @@
       var hay = hayContenido('virola') || hayContenido('termo');
       if (!hay) { var t = q('#amg-txt'); if (t) { t.style.borderColor = 'red'; t.focus(); } return; }
       resultado = exportar(); cerrar(); pintarCaja();
+      if (seguirAlCarrito) { seguirAlCarrito = false; setTimeout(agregarAlCarrito, 300); }
     };
     if (st.sel < 0 && st.items.length) st.sel = 0;
     editor(); r();
@@ -620,7 +621,23 @@
       ? '<p>✨ <b>Elegiste con grabado.</b> ' + textoCaja() + '</p><button type="button" class="amg-btn" id="amg-open">✏️ Diseñar mi grabado</button>'
       : '<p><b>✓ Tu diseño está listo.</b> Agregá el producto al carrito y, cuando termines la compra, mandanos el diseño por WhatsApp con tu número de pedido.</p><div class="amg-res"><img alt="Diseño del grabado" src="' + resultado + '"><div class="amg-acc" style="flex-direction:column"><button type="button" class="amg-btn wa" id="amg-wa">Enviar diseño por WhatsApp</button><button type="button" class="amg-btn sec" id="amg-open">Editar diseño</button></div></div>';
   }
+  // ---------- aviso si eligen "Con grabado" y van al carrito sin diseñar ----------
+  var saltarAviso = false, seguirAlCarrito = false;
+  function agregarAlCarrito() { var b = document.getElementById('add_to_cart-btn'); if (b) { saltarAviso = true; b.click(); setTimeout(function () { saltarAviso = false; }, 1500); } }
+  function recordatorio() {
+    var ov = aviso('<h3>¿Diseñamos tu grabado? ✏️</h3><p style="font-size:15px;margin:0">Elegiste <b>con grabado</b> pero todavía no hiciste el diseño. Podés armarlo ahora en un minuto o mandárnoslo después por WhatsApp.</p><div class="amg-acc"><button type="button" class="amg-btn" id="amg-r-dis">Diseñar ahora</button><button type="button" class="amg-btn sec" id="amg-r-seg">Lo mando después</button></div>');
+    ov.querySelector('#amg-r-dis').onclick = function () { ov.remove(); seguirAlCarrito = true; abrir(); };
+    ov.querySelector('#amg-r-seg').onclick = function () { ov.remove(); agregarAlCarrito(); };
+  }
+  function interceptar(e) {
+    if (saltarAviso || resultado || !conGrabado()) return false;
+    e.preventDefault(); e.stopImmediatePropagation(); recordatorio(); return true;
+  }
+  document.addEventListener('submit', function (e) { if (e.target && e.target.id === 'add_to_cart-form') interceptar(e); }, true);
+
   document.addEventListener('click', function (e) {
+    if (e.target.closest('#add_to_cart-btn') && interceptar(e)) return;
+    if (e.target.closest('.amg-x') && seguirAlCarrito && !e.target.closest('.amg-av')) seguirAlCarrito = false;
     if (e.target.closest('#amg-open')) { e.preventDefault(); abrir(); return; }
     if (e.target.closest('#amg-wa')) { e.preventDefault(); enviar(); return; }
     if (e.target.closest('#amg-dl')) { e.preventDefault(); descargar(); return; }
