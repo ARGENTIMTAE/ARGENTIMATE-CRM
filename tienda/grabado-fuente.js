@@ -100,7 +100,7 @@
       '.amg-btn.wa{background:#25d366}',
       '.amg-btn.sm{padding:7px 12px;font-size:13px}',
       '.amg-res{display:flex;gap:12px;align-items:center}',
-      '.amg-res img{width:120px;border-radius:50%;border:1px solid #ddd;background:#fff}',
+      '.amg-res img{width:130px;height:auto;border-radius:8px;border:1px solid #ddd;background:#fff}',
       '.amg-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:10px}',
       '.amg-m{position:relative;background:#fff;border-radius:16px;width:min(980px,100%);max-height:96vh;overflow:auto;display:grid;grid-template-columns:1fr 1fr;font-family:Montserrat,system-ui,sans-serif;color:#222}',
       '.amg-prev{background:' + CREMA + ';padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:sticky;top:0;align-self:start;box-sizing:border-box}',
@@ -318,7 +318,14 @@
   }
   function exportar() { // imagen final: virola + detalle escrito abajo
     var ring = document.createElement('canvas'); ring.width = ring.height = 700; dibujar(ring, false);
-    var det = lineasDetalle(), prod = nombreProducto(), cab = 110, alto = 700 + cab + 40 + det.length * 34 + 30;
+    var prod = nombreProducto(), cab = 110, mc = document.createElement('canvas').getContext('2d'), det = [];
+    mc.font = '500 20px Montserrat,sans-serif';
+    lineasDetalle().forEach(function (l) { // partir renglones largos
+      var pal = ('• ' + l).split(' '), lin = '';
+      pal.forEach(function (p) { var prueba = lin ? lin + ' ' + p : p; if (mc.measureText(prueba).width > 640 && lin) { det.push(lin); lin = '   ' + p; } else lin = prueba; });
+      det.push(lin);
+    });
+    var alto = 700 + cab + 40 + det.length * 30 + 30;
     var cv = document.createElement('canvas'); cv.width = 700; cv.height = alto; var c = cv.getContext('2d');
     c.fillStyle = '#fff'; c.fillRect(0, 0, 700, alto);
     c.fillStyle = AZUL; c.fillRect(0, 0, 700, 64);
@@ -326,7 +333,7 @@
     c.fillStyle = '#222'; c.font = '700 21px Montserrat,sans-serif'; c.fillText(prod.length > 52 ? prod.slice(0, 50) + '…' : prod, 350, 90);
     c.drawImage(ring, 0, cab);
     c.textAlign = 'left'; c.font = '500 20px Montserrat,sans-serif'; c.fillStyle = '#333';
-    det.forEach(function (l, i) { c.fillText('• ' + (l.length > 58 ? l.slice(0, 56) + '…' : l), 30, 700 + cab + 30 + i * 34); });
+    det.forEach(function (l, i) { c.fillText(l, 30, 700 + cab + 30 + i * 30); });
     return cv.toDataURL('image/png');
   }
 
@@ -414,6 +421,7 @@
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', verDiseno); else verDiseno();
+  window.addEventListener('hashchange', verDiseno);
 
   // ---------- caja debajo de la opción de grabado ----------
   function pintarCaja() {
