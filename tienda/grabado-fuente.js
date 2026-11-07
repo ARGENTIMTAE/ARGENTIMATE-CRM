@@ -602,6 +602,12 @@
   window.addEventListener('hashchange', verDiseno);
 
   // ---------- caja debajo de la opción de grabado ----------
+  function textoCaja() {
+    var ps = piezasProducto();
+    if (ps.length > 1) return 'Diseñá el grabado del mate y/o del termo acá mismo: escribí, elegí la letra y sumá estrellas, corazones y más.';
+    if (ps[0] === 'termo') return 'Diseñá el grabado de tu termo acá mismo: escribí, elegí la letra y sumá estrellas, corazones y más.';
+    return 'Diseñá tu virola acá mismo: escribí, elegí la letra, curvá el texto y sumá estrellas, corazones y más.';
+  }
   function pintarCaja() {
     var cont = document.getElementById('product-vip__attributes'), caja = document.getElementById('amg-box');
     if (!cont || !conGrabado()) { if (caja) caja.style.display = 'none'; return; }
@@ -611,7 +617,7 @@
     var clave = resultado ? resultado.length + ':' + resultado.slice(-40) : 'vacio';
     if (caja.getAttribute('data-k') === clave) return; caja.setAttribute('data-k', clave);
     caja.innerHTML = !resultado
-      ? '<p>✨ <b>Elegiste con grabado.</b> Diseñá tu virola acá mismo: escribí, elegí la letra, curvá el texto y sumá estrellas, corazones y más.</p><button type="button" class="amg-btn" id="amg-open">✏️ Diseñar mi grabado</button>'
+      ? '<p>✨ <b>Elegiste con grabado.</b> ' + textoCaja() + '</p><button type="button" class="amg-btn" id="amg-open">✏️ Diseñar mi grabado</button>'
       : '<p><b>✓ Tu diseño está listo.</b> Agregá el producto al carrito y, cuando termines la compra, mandanos el diseño por WhatsApp con tu número de pedido.</p><div class="amg-res"><img alt="Diseño del grabado" src="' + resultado + '"><div class="amg-acc" style="flex-direction:column"><button type="button" class="amg-btn wa" id="amg-wa">Enviar diseño por WhatsApp</button><button type="button" class="amg-btn sec" id="amg-open">Editar diseño</button></div></div>';
   }
   document.addEventListener('click', function (e) {
