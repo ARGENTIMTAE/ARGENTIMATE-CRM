@@ -57,7 +57,7 @@
   var CX = 350, CY = 350, R1 = 330, R0 = 228, RM = (R0 + R1) / 2;
   function nuevoTexto(ang) { return { t: 'text', txt: '', fuente: 0, tam: 58, ang: ang, r: RM, modo: 'curvo', esp: 2 }; }
   // Termo (vista de frente): zona grabable dentro del cuerpo
-  var TZ = { x0: 248, x1: 452, y0: 205, y1: 625 };
+  var TZ = { x0: 276, x1: 424, y0: 186, y1: 560 };
   function nuevoTextoT(y) { return { t: 'text', txt: '', fuente: 0, tam: 40, x: 350, y: y, rot: 0, esp: 2 }; }
   var SUPT = {
     plantilla: { n: 'Plantilla', ring: '#ffffff', line: '#111', ink: '#111' },
@@ -78,27 +78,32 @@
   var st = PZ.virola, piezaInicial = false;
   function sups() { return st.pieza === 'termo' ? SUPT : SUP; }
   function hayContenido(p) { return PZ[p].items.some(function (it) { return it.t !== 'text' || it.txt.trim(); }); }
-  var resultado = null;
+  var resultado = null, resultadoPiezas = '';
 
   // ---------- detectar la opción de grabado ----------
-  function itemsGrabado() { // devuelve los botones del atributo de grabado, o null
-    var attrs = document.querySelectorAll('.product-vip__attribute');
+  function esConGrabado(v) { v = (v || '').trim(); return /con\s*grabad/i.test(v) || /^s[ií]\b/i.test(v) || (/grabad/i.test(v) && !/sin/i.test(v)); }
+  function atributosGrabado() { // [{nombre, items}] de cada atributo de grabado (Con/Sin grabado)
+    var out = [], attrs = document.querySelectorAll('.product-vip__attribute');
     for (var i = 0; i < attrs.length; i++) {
       var nom = (attrs[i].querySelector('.product-vip__attribute-name') || {}).textContent || '';
       var its = attrs[i].querySelectorAll('.product-vip__attribute-item');
-      var vals = [].map.call(its, function (x) { return x.getAttribute('data-value') || ''; }).join('|');
-      if (/grabad/i.test(vals) || /grabad/i.test(nom)) return its;
+      var vals = [].map.call(its, function (x) { return x.getAttribute('data-value') || ''; });
+      var esGrab = vals.some(function (v) { return /grabad/i.test(v); }) || (/grabad/i.test(nom) && vals.some(function (v) { return /^(s[ií]|no)$/i.test(v.trim()); }));
+      if (esGrab) out.push({ nombre: nom, items: its });
     }
-    return null;
+    return out;
   }
-  function conGrabado() {
-    var its = itemsGrabado(); if (!its) return false;
-    for (var i = 0; i < its.length; i++) if (its[i].classList.contains('product-vip__attribute-item--selected')) {
-      var v = (its[i].getAttribute('data-value') || '').trim();
-      return /con\s*grabad/i.test(v) || /^s[ií]\b/i.test(v) || (/grabad/i.test(v) && !/sin/i.test(v));
-    }
-    return false;
+  function piezasActivas() { // piezas con "Con grabado" elegido
+    var out = [], soloTermo = piezasProducto().length === 1 && piezasProducto()[0] === 'termo';
+    atributosGrabado().forEach(function (a) {
+      var sel = [].filter.call(a.items, function (x) { return x.classList.contains('product-vip__attribute-item--selected'); })[0];
+      if (!sel || !esConGrabado(sel.getAttribute('data-value'))) return;
+      var p = /termo/i.test(a.nombre) || soloTermo ? 'termo' : 'virola';
+      if (out.indexOf(p) < 0) out.push(p);
+    });
+    return out.sort(function (a, b) { return a === 'virola' ? -1 : 1; });
   }
+  function conGrabado() { return piezasActivas().length > 0; }
   function nombreProducto() { var h = document.querySelector('h1'); return h ? h.textContent.trim() : document.title.split(' - ')[0]; }
   function fontStr(it) { var F = FUENTES[it.fuente]; return F.w + ' ' + it.tam + 'px "' + F.f + '"'; }
   function abajo(a) { return Math.sin(a) > 0.15; } // en la mitad de abajo se da vuelta para leerse derecho
@@ -231,17 +236,26 @@
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 700, 700);
     if (!preview) { c.fillStyle = '#fff'; c.fillRect(0, 0, 700, 700); }
     function relleno(x0, x1) { if (st.sup === 'plantilla') return S.ring; var g = c.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, S.line); g.addColorStop(.25, S.ring); g.addColorStop(.45, st.sup === 'negro' ? '#444' : '#fff'); g.addColorStop(.7, S.ring); g.addColorStop(1, S.line); return g; }
-    c.lineWidth = 5; c.strokeStyle = st.sup === 'plantilla' ? '#111' : S.line; c.lineJoin = 'round';
-    // manija (media manija a la derecha)
-    c.beginPath(); c.moveTo(470, 235); c.bezierCurveTo(560, 235, 560, 430, 470, 430); c.lineWidth = 22; c.strokeStyle = st.sup === 'plantilla' ? '#111' : S.line; c.stroke(); c.lineWidth = 12; c.strokeStyle = st.sup === 'plantilla' ? '#fff' : S.ring; c.stroke();
-    c.lineWidth = 5; c.strokeStyle = st.sup === 'plantilla' ? '#111' : S.line;
-    // tapa
-    rr(c, 268, 48, 164, 78, 14); c.fillStyle = relleno(268, 432); c.fill(); c.stroke();
-    c.beginPath(); c.moveTo(268, 72); c.lineTo(432, 72); c.lineWidth = 3; c.stroke(); c.lineWidth = 5;
-    // hombro y cuerpo
-    c.beginPath(); c.moveTo(280, 126); c.lineTo(420, 126); c.quadraticCurveTo(470, 140, 474, 185); c.lineTo(474, 625); c.quadraticCurveTo(474, 662, 440, 662); c.lineTo(260, 662); c.quadraticCurveTo(226, 662, 226, 625); c.lineTo(226, 185); c.quadraticCurveTo(230, 140, 280, 126); c.closePath();
-    c.fillStyle = relleno(226, 474); c.fill(); c.stroke();
-    c.beginPath(); c.moveTo(226, 192); c.lineTo(474, 192); c.lineWidth = 3; c.stroke();
+    var LN = st.sup === 'plantilla' ? '#111' : S.line;
+    c.lineWidth = 5; c.strokeStyle = LN; c.lineJoin = 'round'; c.lineCap = 'round';
+    // pico / rosca abierta (aros apilados)
+    rr(c, 271, 92, 158, 34, 12); c.fillStyle = relleno(271, 429); c.fill(); c.stroke();
+    rr(c, 281, 76, 138, 22, 9); c.fillStyle = relleno(281, 419); c.fill(); c.stroke();
+    rr(c, 281, 60, 138, 22, 9); c.fillStyle = relleno(281, 419); c.fill(); c.stroke();
+    c.beginPath(); c.ellipse(350, 56, 66, 9, 0, 0, Math.PI * 2); c.fillStyle = relleno(284, 416); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(286, 109); c.quadraticCurveTo(350, 117, 414, 109); c.lineWidth = 3; c.stroke(); c.lineWidth = 5;
+    // cuerpo
+    rr(c, 258, 120, 184, 500, 24); c.fillStyle = relleno(258, 442); c.fill(); c.stroke();
+    // franjas de arriba y de abajo
+    c.beginPath(); c.moveTo(260, 172); c.quadraticCurveTo(350, 182, 440, 172); c.stroke();
+    c.beginPath(); c.moveTo(260, 572); c.quadraticCurveTo(350, 582, 440, 572); c.stroke();
+    // media manija: lengüeta sobre el cuerpo + barra colgando
+    c.beginPath();
+    c.moveTo(430, 150); c.quadraticCurveTo(418, 150, 418, 141); c.quadraticCurveTo(418, 133, 432, 132);
+    c.lineTo(468, 134); c.quadraticCurveTo(496, 138, 496, 168);
+    c.lineTo(496, 350); c.quadraticCurveTo(496, 372, 476, 372); c.quadraticCurveTo(456, 372, 456, 350);
+    c.lineTo(456, 175); c.quadraticCurveTo(455, 154, 440, 152); c.closePath();
+    c.fillStyle = st.sup === 'plantilla' ? '#fff' : relleno(418, 496); c.fill(); c.stroke();
     if (preview) { c.save(); c.setLineDash([6, 6]); c.lineWidth = 1.5; c.strokeStyle = st.sup === 'negro' ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.2)'; c.strokeRect(TZ.x0, TZ.y0, TZ.x1 - TZ.x0, TZ.y1 - TZ.y0); c.restore(); }
     st.items.forEach(function (it) { dibujarItemT(c, it, S, preview); });
     if (preview && st.items[st.sel]) {
@@ -294,7 +308,7 @@
     function r() { dibujar(cv, true); }
     window.__amgR = r;
 
-    var piezas = piezasProducto();
+    var piezas = piezasActivas(); if (!piezas.length) piezas = piezasProducto();
     if (!piezaInicial) { st = PZ[piezas[0]]; piezaInicial = true; }
     if (piezas.indexOf(st.pieza) < 0) st = PZ[piezas[0]];
     function marcarSup() { [].forEach.call(ov.querySelectorAll('[data-s]'), function (b) { b.classList.toggle('on', b.dataset.s === st.sup); }); }
@@ -320,7 +334,7 @@
     });
     function nIconos() { return st.items.filter(function (i) { return i.t !== 'text'; }).length; }
     function lugarLibre() { var angs = [-Math.PI / 2 - .95, -Math.PI / 2 + .95, -Math.PI / 2 - 1.6, -Math.PI / 2 + 1.6, Math.PI / 2 - .9, Math.PI / 2 + .9, Math.PI / 2]; return angs[nIconos() % angs.length]; }
-    function lugarLibreT() { var ps = [[350, 250], [350, 560], [290, 450], [410, 450], [290, 250], [410, 250]]; return ps[nIconos() % ps.length]; }
+    function lugarLibreT() { var ps = [[350, 240], [350, 510], [305, 440], [395, 440], [305, 240], [395, 240]]; return ps[nIconos() % ps.length]; }
     q('#amg-icons').onclick = function (e) {
       var b = e.target.closest('[data-icon]'); if (!b) return;
       if (st.pieza === 'termo') { var p = lugarLibreT(); st.items.push({ t: 'icon', icon: b.dataset.icon, tam: 56, x: p[0], y: p[1], rot: 0 }); }
@@ -412,7 +426,7 @@
     q('#amg-ok').onclick = function () {
       var hay = hayContenido('virola') || hayContenido('termo');
       if (!hay) { var t = q('#amg-txt'); if (t) { t.style.borderColor = 'red'; t.focus(); } return; }
-      resultado = exportar(); cerrar(); pintarCaja();
+      resultado = exportar(); resultadoPiezas = piezasActivas().join(','); cerrar(); pintarCaja();
       if (seguirAlCarrito) { seguirAlCarrito = false; setTimeout(agregarAlCarrito, 300); }
     };
     if (st.sel < 0 && st.items.length) st.sel = 0;
@@ -440,7 +454,7 @@
     return filas.map(function (f) { return f.d; });
   }
   function conPieza(p, fn) { var prev = st; st = PZ[p]; try { return fn(); } finally { st = prev; } }
-  function piezasConDiseno() { return (piezasLink || piezasProducto()).filter(hayContenido); }
+  function piezasConDiseno() { var ps = piezasLink || piezasActivas(); if (!ps.length) ps = piezasProducto(); return ps.filter(hayContenido); }
   function lineasDetalle() { // todas las piezas con diseño, con título si hay más de una
     var ps = piezasConDiseno(), out = [];
     ps.forEach(function (p) {
@@ -604,7 +618,7 @@
 
   // ---------- caja debajo de la opción de grabado ----------
   function textoCaja() {
-    var ps = piezasProducto();
+    var ps = piezasActivas(); if (!ps.length) ps = piezasProducto();
     if (ps.length > 1) return 'Diseñá el grabado del mate y/o del termo acá mismo: escribí, elegí la letra y sumá estrellas, corazones y más.';
     if (ps[0] === 'termo') return 'Diseñá el grabado de tu termo acá mismo: escribí, elegí la letra y sumá estrellas, corazones y más.';
     return 'Diseñá tu virola acá mismo: escribí, elegí la letra, curvá el texto y sumá estrellas, corazones y más.';
@@ -615,7 +629,9 @@
     cargarEstilos();
     if (!caja) { caja = document.createElement('div'); caja.id = 'amg-box'; caja.className = 'amg-box'; cont.parentNode.insertBefore(caja, cont.nextSibling); }
     caja.style.display = '';
-    var clave = resultado ? resultado.length + ':' + resultado.slice(-40) : 'vacio';
+    var act = piezasActivas().join(',');
+    if (resultado && resultadoPiezas !== act) resultado = null; // cambió qué se graba: pedir completar el diseño
+    var clave = act + '|' + (resultado ? resultado.length + ':' + resultado.slice(-40) : 'vacio');
     if (caja.getAttribute('data-k') === clave) return; caja.setAttribute('data-k', clave);
     caja.innerHTML = !resultado
       ? '<p>✨ <b>Elegiste con grabado.</b> ' + textoCaja() + '</p><button type="button" class="amg-btn" id="amg-open">✏️ Diseñar mi grabado</button>'
