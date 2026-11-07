@@ -128,6 +128,8 @@
       '.amg-acc{display:flex;gap:8px;flex-wrap:wrap}',
       '.amg-del{background:none;border:0;color:#c0392b;font-size:13px;cursor:pointer;padding:4px 0;font-weight:700}',
       '.amg-nota{font-size:12px;color:#666;margin:0}',
+      '.amg-m.amg-av{grid-template-columns:1fr;width:min(520px,100%)}',
+      '.amg-av a.amg-btn{text-decoration:none}',
       '@media(max-width:760px){.amg-m{grid-template-columns:1fr;max-height:98vh}.amg-prev{position:sticky;top:0;z-index:2;padding:8px}.amg-prev canvas{max-width:240px}.amg-prev small{display:none}.amg-fonts{grid-template-columns:repeat(2,1fr)}.amg-icons{grid-template-columns:repeat(6,1fr)}}'
     ].join('');
     document.head.appendChild(css);
@@ -174,7 +176,8 @@
       c.translate(CX + it.r * Math.cos(it.ang), CY + it.r * Math.sin(it.ang));
       c.rotate(it.ang + (abajo(it.ang) ? -Math.PI / 2 : Math.PI / 2) + (it.rot || 0) * Math.PI / 180);
       if (it.t === 'icon') { var s = it.tam / 2; c.scale(s, s); ICONOS[it.icon].d(c, S.ring); }
-      else { var im = it.cache[st.sup], w = it.tam * 1.2, h = w * im.height / im.width; c.drawImage(im, -w / 2, -h / 2, w, h); }
+      else if (it.cache && it.cache[st.sup]) { var im = it.cache[st.sup], w = it.tam * 1.2, h = w * im.height / im.width; c.drawImage(im, -w / 2, -h / 2, w, h); }
+      else { var q = it.tam * .6; c.strokeStyle = S.ink; c.lineWidth = 3; c.setLineDash([8, 6]); c.strokeRect(-q, -q * .7, q * 2, q * 1.4); c.setLineDash([]); c.font = '700 ' + Math.round(q * .45) + 'px Montserrat,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('LOGO', 0, 0); }
     }
     c.restore();
   }
@@ -295,24 +298,122 @@
     q('#amg-ok').onclick = function () {
       var hay = st.items.some(function (it) { return it.t !== 'text' || it.txt.trim(); });
       if (!hay) { var t = q('#amg-txt'); if (t) { t.style.borderColor = 'red'; t.focus(); } return; }
-      var ex = document.createElement('canvas'); ex.width = ex.height = 700; dibujar(ex, false);
-      resultado = ex.toDataURL('image/png'); cerrar(); pintarCaja();
+      resultado = exportar(); cerrar(); pintarCaja();
     };
     if (st.sel < 0 && st.items.length) st.sel = 0;
     editor(); r();
     if (document.fonts) { document.fonts.ready.then(r); FUENTES.forEach(function (F) { document.fonts.load(F.w + ' 40px "' + F.f + '"').then(r, function () {}); }); }
   }
 
-  function resumen() {
-    var t = 'Hola! Quiero este grabado de virola para: *' + nombreProducto() + '*\n', n = 0;
+  // ---------- detalle del diseño (va en el mensaje y dentro de la imagen) ----------
+  function lineasDetalle() {
+    var out = [], n = 0, iconos = [];
     st.items.forEach(function (it) {
-      if (it.t === 'text' && it.txt.trim()) { n++; t += '• Texto ' + n + ': "' + it.txt + '" — letra ' + FUENTES[it.fuente].n + ', ' + it.modo + (abajo(it.ang) ? ' (abajo)' : ' (arriba)') + '\n'; }
-      else if (it.t === 'icon') t += '• Elemento: ' + ICONOS[it.icon].n + '\n';
-      else if (it.t === 'img') t += '• Logo propio (les mando el archivo)\n';
+      if (it.t === 'text' && it.txt.trim()) { n++; out.push('Texto ' + n + ': "' + it.txt + '" — letra ' + FUENTES[it.fuente].n + ', ' + it.modo + (abajo(it.ang) ? ' (abajo)' : ' (arriba)')); }
+      else if (it.t === 'icon') iconos.push(ICONOS[it.icon].n);
+      else if (it.t === 'img') out.push('Logo propio (va el archivo aparte)');
     });
-    return t + '\nLes adjunto la imagen del diseño.\n' + location.href;
+    if (iconos.length) out.push('Elementos: ' + iconos.join(', '));
+    return out;
   }
-  window.__amgResumen = resumen; window.__amgSt = st;
+  function exportar() { // imagen final: virola + detalle escrito abajo
+    var ring = document.createElement('canvas'); ring.width = ring.height = 700; dibujar(ring, false);
+    var det = lineasDetalle(), prod = nombreProducto(), cab = 110, alto = 700 + cab + 40 + det.length * 34 + 30;
+    var cv = document.createElement('canvas'); cv.width = 700; cv.height = alto; var c = cv.getContext('2d');
+    c.fillStyle = '#fff'; c.fillRect(0, 0, 700, alto);
+    c.fillStyle = AZUL; c.fillRect(0, 0, 700, 64);
+    c.fillStyle = '#fff'; c.font = '700 26px Montserrat,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ARGENTIMATE · Diseño de grabado', 350, 32);
+    c.fillStyle = '#222'; c.font = '700 21px Montserrat,sans-serif'; c.fillText(prod.length > 52 ? prod.slice(0, 50) + '…' : prod, 350, 90);
+    c.drawImage(ring, 0, cab);
+    c.textAlign = 'left'; c.font = '500 20px Montserrat,sans-serif'; c.fillStyle = '#333';
+    det.forEach(function (l, i) { c.fillText('• ' + (l.length > 58 ? l.slice(0, 56) + '…' : l), 30, 700 + cab + 30 + i * 34); });
+    return cv.toDataURL('image/png');
+  }
+
+  // ---------- link que muestra el diseño (todo va en la dirección, sin servidor) ----------
+  function codificar() {
+    var d = { v: 1, s: Object.keys(SUP).indexOf(st.sup), i: st.items.map(function (it) {
+      var a = Math.round(it.ang * 1800 / Math.PI) / 10, r = Math.round(it.r);
+      if (it.t === 'text') return [0, it.txt, it.fuente, it.tam, a, r, it.modo === 'recto' ? 1 : 0, it.esp];
+      if (it.t === 'icon') return [1, it.icon, it.tam, a, r, it.rot || 0];
+      return [2, it.tam, a, r, it.rot || 0];
+    }).filter(function (x) { return x[0] !== 0 || String(x[1]).trim(); }) };
+    var b = btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+    return b.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function decodificar(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+    var d = JSON.parse(decodeURIComponent(escape(atob(s))));
+    st.sup = Object.keys(SUP)[d.s] || 'plantilla'; st.sel = -1;
+    st.items = d.i.map(function (x) {
+      if (x[0] === 0) return { t: 'text', txt: x[1], fuente: x[2], tam: x[3], ang: x[4] * Math.PI / 180, r: x[5], modo: x[6] ? 'recto' : 'curvo', esp: x[7] };
+      if (x[0] === 1) return { t: 'icon', icon: ICONOS[x[1]] ? x[1] : 'estrella', tam: x[2], ang: x[3] * Math.PI / 180, r: x[4], rot: x[5] };
+      return { t: 'img', tam: x[1], ang: x[2] * Math.PI / 180, r: x[3], rot: x[4] };
+    });
+  }
+  function linkDiseno() { return location.origin + location.pathname + '#grabado=' + codificar(); }
+
+  function resumen() {
+    var t = 'Hola! Quiero este grabado de virola para: *' + nombreProducto() + '*\n';
+    lineasDetalle().forEach(function (l) { t += '• ' + l + '\n'; });
+    return t + '\nVer el diseño: ' + linkDiseno();
+  }
+  window.__amgResumen = resumen; window.__amgSt = st; window.__amgLink = linkDiseno;
+
+  // ---------- enviar: imagen adjunta en el celu, copiada en la compu ----------
+  function blobDe(dataUrl) { var p = dataUrl.split(','), b = atob(p[1]), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: 'image/png' }); }
+  function urlWA(txt) { return 'https://wa.me/' + WA + '?text=' + encodeURIComponent(txt); }
+  function descargar() { var a = document.createElement('a'); a.href = resultado; a.download = 'grabado-argentimate.png'; document.body.appendChild(a); a.click(); a.remove(); }
+  function aviso(html) {
+    cargarEstilos(); var ov = document.createElement('div'); ov.className = 'amg-ov';
+    ov.innerHTML = '<div class="amg-m amg-av"><button type="button" class="amg-x" aria-label="Cerrar">×</button><div class="amg-ctl">' + html + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.closest('.amg-x')) ov.remove(); });
+    return ov;
+  }
+  function enviar() {
+    var txt = resumen(), blob = blobDe(resultado), file = null;
+    try { file = new File([blob], 'grabado-argentimate.png', { type: 'image/png' }); } catch (e) {}
+    var movil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+    if (movil && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], text: txt }).then(function () {
+        aviso('<h3>¡Gracias! 🧉</h3><p class="amg-nota" style="font-size:14px">Si el mensaje te llegó sin el texto, tocá acá para mandarnos también el detalle:</p><a class="amg-btn wa" target="_blank" href="' + urlWA(txt) + '">Mandar el detalle por WhatsApp</a>');
+      }, function (e) {
+        if (e && e.name === 'AbortError') return;
+        descargar(); window.open(urlWA(txt), '_blank');
+      });
+      return;
+    }
+    var abrirWA = '<a class="amg-btn wa" target="_blank" href="' + urlWA(txt) + '">Abrir WhatsApp</a>';
+    function okCopiado() {
+      aviso('<h3>✓ Imagen copiada</h3><p style="font-size:15px;margin:0">Se abrió el chat de WhatsApp con el mensaje. <b>Antes de enviarlo, pegá la imagen con Ctrl + V</b> (Cmd + V en Mac) y mandá todo junto.</p><div class="amg-acc">' + abrirWA + '<button type="button" class="amg-btn sec" id="amg-dl">Descargar imagen</button></div>');
+      window.open(urlWA(txt), '_blank');
+    }
+    function sinCopiar() {
+      descargar();
+      aviso('<h3>Mandanos el diseño</h3><p style="font-size:15px;margin:0">Te descargamos la imagen del diseño. En el chat de WhatsApp <b>adjuntala con el clip 📎</b> y enviala junto con el mensaje.</p><div class="amg-acc">' + abrirWA + '</div>');
+      window.open(urlWA(txt), '_blank');
+    }
+    try {
+      if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(okCopiado, sinCopiar);
+      else sinCopiar();
+    } catch (e) { sinCopiar(); }
+  }
+
+  // ---------- al abrir el link del mensaje: mostrar el diseño del cliente ----------
+  function verDiseno() {
+    var m = /#grabado=([A-Za-z0-9_-]+)/.exec(location.hash); if (!m) return;
+    try { decodificar(m[1]); } catch (e) { return; }
+    cargarEstilos();
+    var usadas = st.items.filter(function (it) { return it.t === 'text'; }).map(function (it) { var F = FUENTES[it.fuente]; return document.fonts ? document.fonts.load(F.w + ' 40px "' + F.f + '"') : null; });
+    usadas.push(document.fonts ? document.fonts.load('700 20px Montserrat') : null);
+    Promise.all(usadas.map(function (p) { return p && p.catch ? p.catch(function () {}) : p; })).then(function () {
+      resultado = exportar();
+      var ov = aviso('<h3>Diseño de grabado del cliente</h3><img src="' + resultado + '" alt="Diseño del grabado" style="width:100%;border:1px solid #eee;border-radius:12px"><div class="amg-acc"><button type="button" class="amg-btn" id="amg-dl">Descargar imagen</button></div>');
+      ov.querySelector('.amg-m').style.maxWidth = '560px';
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', verDiseno); else verDiseno();
 
   // ---------- caja debajo de la opción de grabado ----------
   function pintarCaja() {
@@ -329,11 +430,8 @@
   }
   document.addEventListener('click', function (e) {
     if (e.target.closest('#amg-open')) { e.preventDefault(); abrir(); return; }
-    if (e.target.closest('#amg-wa')) {
-      e.preventDefault();
-      var a = document.createElement('a'); a.href = resultado; a.download = 'grabado-argentimate.png'; document.body.appendChild(a); a.click(); a.remove();
-      window.open('https://wa.me/' + WA + '?text=' + encodeURIComponent(resumen()), '_blank'); return;
-    }
+    if (e.target.closest('#amg-wa')) { e.preventDefault(); enviar(); return; }
+    if (e.target.closest('#amg-dl')) { e.preventDefault(); descargar(); return; }
     if (e.target.closest('.product-vip__attribute-item')) setTimeout(pintarCaja, 60);
     setTimeout(pintarCaja, 250);
   }, true);
